@@ -4,7 +4,7 @@ import type { ActorState, NpcState, Task } from './types';
 import { FISTS, ITEMS, type WeaponDef } from './items';
 import { CK } from '../world/collision';
 import { witnessAct, raiseAlarm } from './perception';
-import { followPath, requestPath } from './movement';
+import { followPath, requestPath, leaveFurniture } from './movement';
 import type { TaskResult } from './tasks';
 
 export function weaponOf(a: ActorState): WeaponDef {
@@ -136,7 +136,7 @@ export function damageActor(sim: Simulation, t: ActorState, attacker: ActorState
   t.staggerT = Math.max(t.staggerT, blocked ? 0.12 : 0.35);
   if (npcT && npcT.sleeping) {
     npcT.sleeping = false;
-    npcT.usingFurniture = -1;
+    leaveFurniture(sim, npcT);
     npcT.stance = 'stand';
   }
   // knock back

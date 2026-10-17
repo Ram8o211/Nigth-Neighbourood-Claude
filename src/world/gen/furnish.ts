@@ -626,4 +626,56 @@ export function furnishBuilding(rng: Rng, world: WorldData, b: Building) {
     furnishRoom(rng, world, b, room, !phonePlaced);
     for (let i = before; i < world.furniture.length; i++) if (world.furniture[i].use === 'phone') phonePlaced = true;
   }
+  // every home has a telephone somewhere: fall back to any room, making space if needed
+  if (!phonePlaced) addEssential(rng, world, b, S.phone, ['living', 'hall', 'kitchen', 'bedroom', 'barroom']);
+}
+
+const ROOM_DECOR = new Set(['plant', 'floorlamp', 'armchair', 'bookshelf', 'coatrack', 'dresser', 'jukebox']);
+
+/** a context for a room that already has furniture in it */
+function ctxWithExisting(rng: Rng, world: WorldData, b: Building, room: Room): Ctx {
+  const ctx = makeCtx(rng, world, b, room);
+  for (const f of world.furniture) {
+    if (f.roomId !== room.id || f.kind === 'none' || f.use === 'decor' && f.kind === 'rug') continue;
+    ctx.placed.push(rect(f.x - f.w / 2, f.z - f.d / 2, f.x + f.w / 2, f.z + f.d / 2));
+  }
+  return ctx;
+}
+
+/**
+ * Make sure a building has a piece of furniture: try the preferred rooms,
+ * then retire a decorative piece to make room.
+ */
+export function addEssential(rng: Rng, world: WorldData, b: Building, spec: Spec, roomKinds: string[]): Furniture | null {
+  const rooms = roomKinds.flatMap((k) => b.roomIds.map((id) => world.rooms[id]).filter((r) => r.kind === k));
+  for (const room of rooms) {
+    const f = againstWall(ctxWithExisting(rng, world, b, room), spec, undefined, 60);
+    if (f) return f;
+  }
+  for (const room of rooms) {
+    for (const old of world.furniture) {
+      if (old.roomId !== room.id || old.kind === 'none' || !ROOM_DECOR.has(old.kind)) continue;
+      const kind = old.kind;
+      old.kind = 'none';
+      old.solid = false;
+      const f = againstWall(ctxWithExisting(rng, world, b, room), spec, undefined, 60);
+      if (f) {
+        if (old.lightId >= 0) world.lights[old.lightId].broken = true;
+        return f;
+      }
+      old.kind = kind;
+      old.solid = true;
+    }
+  }
+  return null;
+}
+
+/** the player's inherited house needs a telephone and a table for the uncle's letter */
+export function ensureHomeEssentials(rng: Rng, world: WorldData, b: Building) {
+  const has = (use: string) => world.furniture.some((f) => f.buildingId === b.id && f.kind !== 'none' && f.use === use);
+  if (!has('phone')) addEssential(rng, world, b, S.phone, ['living', 'hall', 'kitchen', 'bedroom']);
+  if (!has('table') && !has('desk')) {
+    const side: Spec = { kind: 'table', use: 'table', w: 0.9, d: 0.6, h: 0.76, colors: WOOD };
+    addEssential(rng, world, b, side, ['kitchen', 'living', 'bedroom']) ?? addEssential(rng, world, b, S.desk, ['bedroom', 'living']);
+  }
 }

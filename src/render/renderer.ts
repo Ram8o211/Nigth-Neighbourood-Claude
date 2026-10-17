@@ -268,6 +268,8 @@ export class GameRenderer {
     u.uFear.value = v.fear;
     u.uBrightness.value = this.brightness;
     this.fx.enabled = this.postEnabled;
+    this.renderer.info.autoReset = false;
+    this.renderer.info.reset();
     this.composer.render();
     this.stats.calls = this.renderer.info.render.calls;
     this.stats.tris = this.renderer.info.render.triangles;

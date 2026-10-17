@@ -6,7 +6,7 @@ import { generateLayout, subdivideRows, numberLots } from './layout';
 import { makeFrame } from './frame';
 import { footprintSize, makePlan } from './plans';
 import { buildBuilding } from './buildings';
-import { furnishBuilding } from './furnish';
+import { furnishBuilding, ensureHomeEssentials } from './furnish';
 import {
   PropCtx,
   decorateHouseLot,
@@ -194,6 +194,7 @@ export function generateWorld(params: GenParams): WorldData {
   homeCands.sort((a, b) => dist(lotCentre(a.lot).x, lotCentre(a.lot).z, centre.x, centre.z) - dist(lotCentre(b.lot).x, lotCentre(b.lot).z, centre.x, centre.z));
   const home = homeCands[Math.min(homeCands.length - 1, kindRng.int(0, 3))] ?? infos.find((i) => i.building && i.lot.kind === 'house')!;
   world.playerHouseId = home.building!.id;
+  ensureHomeEssentials(rng.fork('home'), world, home.building!);
 
   // --- props -------------------------------------------------------------------
   const ctx = new PropCtx(rng.fork('props'), world);

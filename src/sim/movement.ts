@@ -24,6 +24,38 @@ export function updateLocation(sim: Simulation, a: ActorState, dt: number) {
   a.building = a.room >= 0 ? sim.world.rooms[a.room].buildingId : -1;
 }
 
+/** get up from a bed / chair / hiding place onto the furniture's free use point */
+export function leaveFurniture(sim: Simulation, a: ActorState) {
+  if (a.usingFurniture < 0) return;
+  const f = sim.world.furniture[a.usingFurniture];
+  if (f && (a.stance === 'sit' || a.stance === 'lie' || a.stance === 'hidden')) {
+    a.x = f.ux;
+    a.z = f.uz;
+  }
+  a.usingFurniture = -1;
+  a.hiddenIn = -1;
+}
+
+/**
+ * Safety net: an npc that cannot even reach the door of the room it stands in
+ * has been pushed into a sealed pocket (between furniture and walls). Move it
+ * to the room's door when nobody is looking.
+ */
+export function unstick(sim: Simulation, npc: NpcState) {
+  const room = sim.grid.roomAt(npc.x, npc.z);
+  let exit: { x: number; z: number } | null = null;
+  if (room >= 0 && sim.world.rooms[room].doorIds.length) exit = sim.doorFrontOfRoom(room);
+  else if (room < 0) exit = sim.randomStreetPoint();
+  if (!exit) return;
+  if (Math.hypot(exit.x - npc.x, exit.z - npc.z) < 0.6) return;
+  if (sim.pf.find(npc.x, npc.z, exit.x, exit.z, sim.agentFor(npc), 6000)) return; // not trapped
+  if (sim.actorsSee(npc.x, npc.z, 0) || sim.actorsSee(exit.x, exit.z, 0)) return;
+  npc.x = exit.x;
+  npc.z = exit.z;
+  npc.pathFail = 0;
+  sim.emit({ type: 'unstuck', a: npc.id });
+}
+
 export function doorPos(sim: Simulation, id: number) {
   const d = sim.world.doors[id];
   return d.axis === 'x' ? { x: d.t, z: d.c } : { x: d.c, z: d.t };
@@ -44,6 +76,7 @@ export function requestPath(sim: Simulation, npc: NpcState, x: number, z: number
   if (!path) {
     npc.path = null;
     npc.pathFail++;
+    if (npc.pathFail >= 3) unstick(sim, npc);
     return 'fail';
   }
   npc.path = path;

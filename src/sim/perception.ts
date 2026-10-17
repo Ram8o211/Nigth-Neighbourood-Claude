@@ -3,6 +3,7 @@ import type { Simulation } from './simulation';
 import type { ActorState, MemTopic, NpcState } from './types';
 import { describeActor, identifies, remember } from './memory';
 import { CFG, isDark, isNight } from './config';
+import { leaveFurniture } from './movement';
 
 /**
  * How visible `target` is to `observer` (0..1). Accounts for field of view,
@@ -159,8 +160,8 @@ export function hearSound(sim: Simulation, kind: string, x: number, z: number, l
     const hz = z + sim.rand(-err, err);
     if (npc.sleeping) {
       npc.sleeping = false;
+      leaveFurniture(sim, npc);
       npc.stance = 'stand';
-      npc.usingFurniture = -1;
       sim.emit({ type: 'wake', a: npc.id });
     }
     remember(sim, npc, { topic, source: 'heard', actor: -1, subject: -1, desc: {}, x: hx, z: hz, time: sim.time, confidence: clarity, from: -1, incident: sim.incidentNear(x, z, 120) });
