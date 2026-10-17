@@ -19,8 +19,33 @@ bottom.
 
 ## Play
 
-Requirements: Node.js 20+ and a browser with WebGL 2 (current Chrome, Edge,
+### In the browser (GitHub Pages)
+
+**https://ram8o211.github.io/Nigth-Neighbourood-Claude/**
+
+Nothing to install: any desktop browser with WebGL 2 (current Chrome, Edge,
 Firefox or Safari). A dedicated or recent integrated GPU is recommended.
+Saves and settings stay in that browser's local storage.
+
+Every push to `main` runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml):
+type-check, unit and simulation tests, production build, deployment to Pages,
+and then the browser smoke test played against the live site (its screenshots
+and results are attached to the run as the `smoke-test-screenshots`
+artifact). The workflow can also be started by hand from the *Actions* tab.
+
+One-time setup by the repository owner: *Settings → Pages → Build and
+deployment → Source: **GitHub Actions***. Until that is set, the deploy job
+fails with "Get Pages site failed"; set it and re-run the workflow.
+
+To run the smoke test from your own machine against the deployed site:
+
+```bash
+NN_URL=https://ram8o211.github.io/Nigth-Neighbourood-Claude/ npm run test:e2e
+```
+
+### Locally
+
+Requirements: Node.js 20+ and a browser with WebGL 2.
 
 ```bash
 npm install

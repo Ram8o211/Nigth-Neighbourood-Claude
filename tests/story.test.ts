@@ -3,6 +3,7 @@ import { makeSim, runHours } from './helpers';
 import { Journal, trait, type ClueAttr } from '../src/game/journal';
 import { Story } from '../src/game/story';
 import { validate, readSave, writeSave, listSaves, SAVE_VERSION } from '../src/game/save';
+import { loadSettings, DEFAULT_SETTINGS } from '../src/game/settings';
 import { WORLD_VERSION } from '../src/world/gen/generator';
 import { SIM_VERSION } from '../src/sim/simulation';
 import type { NpcState } from '../src/sim/types';
@@ -131,9 +132,26 @@ describe('save files', () => {
     expect(validate(null)).toMatch(/Corrupt/);
   });
 
+  it('ignores foreign or malformed settings (Pages sites share one origin)', () => {
+    const KEY = 'night-neighbour-beta/settings.v1';
+    localStorage.setItem(KEY, JSON.stringify({ quality: 'ultra', fov: 'wide', brightness: 1.3, master: null, bindings: { forward: 42, back: 'KeyX' } }));
+    const s = loadSettings();
+    expect(s.quality).toBe(DEFAULT_SETTINGS.quality);
+    expect(s.fov).toBe(DEFAULT_SETTINGS.fov);
+    expect(s.master).toBe(DEFAULT_SETTINGS.master);
+    expect(s.brightness).toBe(1.3);
+    expect(s.bindings.forward).toBe('KeyW');
+    expect(s.bindings.back).toBe('KeyX');
+    localStorage.setItem(KEY, 'null');
+    expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
+    localStorage.setItem(KEY, '{broken');
+    expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
+    localStorage.removeItem(KEY);
+  });
+
   it('reports corrupt and empty slots without throwing', () => {
     expect(readSave('slot2').error).toMatch(/Empty/);
-    localStorage.setItem('nightneighbour.save.slot3', '{not json');
+    localStorage.setItem('night-neighbour-beta/save.slot3', '{not json');
     expect(readSave('slot3').error).toMatch(/Corrupt/);
     expect(writeSave('slot1', good() as never)).toBeNull();
     expect(readSave('slot1').save?.label).toBe('test');

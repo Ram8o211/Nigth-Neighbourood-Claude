@@ -29,7 +29,8 @@ export interface SaveMeta {
   reason?: string;
 }
 
-const PREFIX = 'nightneighbour.save.';
+// prefixed: every GitHub Pages site of an account shares the same origin and localStorage
+const PREFIX = 'night-neighbour-beta/save.';
 export const SLOTS = ['auto', 'slot1', 'slot2', 'slot3'];
 
 export function writeSave(slot: string, s: SaveGame): string | null {

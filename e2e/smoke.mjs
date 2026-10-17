@@ -64,7 +64,7 @@ export default async function smoke(page, h) {
   await h.shot('02_settings');
   await h.clickText('Back');
   check('settings: slider changes a setting', changed !== null, `fov ${fovBefore}`);
-  check('settings: saved to localStorage', await h.eval(() => !!localStorage.getItem('nightneighbour.settings.v1')));
+  check('settings: saved to localStorage', await h.eval(() => !!localStorage.getItem('night-neighbour-beta/settings.v1')));
 
   // ---------------------------------------------------------------- new game
   await h.clickText('New Game');
@@ -343,7 +343,7 @@ export default async function smoke(page, h) {
   await page.waitForTimeout(100);
   await page.locator('#layer button', { hasText: 'Save here' }).nth(0).click();
   await page.waitForTimeout(200);
-  const saved = await h.eval(() => Object.keys(localStorage).filter((k) => k.startsWith('nightneighbour.save.')));
+  const saved = await h.eval(() => Object.keys(localStorage).filter((k) => k.startsWith('night-neighbour-beta/save.')));
   check('save written to localStorage', saved.some((k) => k.endsWith('slot1')), saved.join(','));
   const savedPos = await state();
   if (await h.hasText('Back')) await h.clickText('Back');

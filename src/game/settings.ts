@@ -35,14 +35,35 @@ export const DEFAULT_SETTINGS: Settings = {
   bindings: { ...DEFAULT_BINDINGS },
 };
 
-const KEY = 'nightneighbour.settings.v1';
+/**
+ * All of an account's GitHub Pages sites share one origin (and so one
+ * localStorage), so keys carry a project-specific prefix.
+ */
+const KEY = 'night-neighbour-beta/settings.v1';
+const QUALITIES: Quality[] = ['low', 'medium', 'high'];
 
 export function loadSettings(): Settings {
+  const out = structuredClone(DEFAULT_SETTINGS);
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return structuredClone(DEFAULT_SETTINGS);
-    const s = JSON.parse(raw) as Partial<Settings>;
-    return { ...structuredClone(DEFAULT_SETTINGS), ...s, bindings: { ...DEFAULT_BINDINGS, ...(s.bindings ?? {}) } };
+    if (!raw) return out;
+    const s = JSON.parse(raw) as Record<string, unknown> | null;
+    if (!s || typeof s !== 'object') return out;
+    // take only well-typed values; anything else keeps its default
+    const o = out as unknown as Record<string, unknown>;
+    for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
+      if (k === 'bindings' || !(k in s)) continue;
+      const v = s[k];
+      const def = DEFAULT_SETTINGS[k];
+      if (typeof v !== typeof def) continue;
+      if (typeof v === 'number' && !Number.isFinite(v)) continue;
+      o[k] = v;
+    }
+    if (!QUALITIES.includes(out.quality)) out.quality = DEFAULT_SETTINGS.quality;
+    const b = s.bindings as Record<string, unknown> | undefined;
+    if (b && typeof b === 'object')
+      for (const a of Object.keys(DEFAULT_BINDINGS) as Action[]) if (typeof b[a] === 'string' && b[a]) out.bindings[a] = b[a] as string;
+    return out;
   } catch {
     return structuredClone(DEFAULT_SETTINGS);
   }

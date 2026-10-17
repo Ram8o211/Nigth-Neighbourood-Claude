@@ -97,6 +97,12 @@ saved as `e2e/out/e2e-results.json`.
 Screenshots of each step are written to `e2e/out/`; a selection is in
 `docs/screenshots/`.
 
+The same smoke test runs in GitHub Actions after every deployment to GitHub
+Pages, against the live site (`.github/workflows/pages.yml`, job *Browser
+smoke test on the live site*), and can be pointed at any deployment with
+`NN_URL=<url> npm run test:e2e`. Branches and pull requests run type-check,
+unit tests and a build (`.github/workflows/ci.yml`).
+
 ## Performance
 
 ### Measured: simulation (headless, `scripts/bench.ts`, 24 game hours)
