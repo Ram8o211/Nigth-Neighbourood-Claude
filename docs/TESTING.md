@@ -37,8 +37,9 @@ Output of the last emergent run (3 days, medium town, default director):
 
 `scripts/story-soak.ts` runs the real game director for five nights with a
 passive player who stays locked in at home. Over nine seeds the killer
-claimed 0–4 victims per game (19 in total), the police named persons of
-interest from sightings but arrested nobody, and every game ended with
+claimed 0–4 victims per game (19 in total), the police arrested nobody
+(in some games they named a person of interest from sightings), and every
+game ended with
 *The Night Neighbour got away* – a player who does not investigate loses,
 which is the intended design. (Before the fixes below, two seeds ended on the
 first afternoon with an arrest for a mere trespass, and in another an officer
@@ -67,6 +68,15 @@ target. Checks:
 * a neighbour can be targeted and talked to; introducing yourself makes them
   known; the conversation closes
 * **T** → wait 1 hour advances the clock by 60 game minutes
+* at the hardware store counter **E** opens the shop; buying the flashlight
+  takes $18 and puts it in the inventory, the objective completes, **F**
+  switches it on and off (if the clerk has not reached work yet, the test
+  places them behind the counter)
+* **E** on the home telephone dials the police, who answer about the
+  investigation
+* the police chief can be talked to and asked about the case
+* with a crowbar, a neighbour's locked front door offers *Pry the door open*;
+  holding **E** opens it and marks it as forced
 * **Esc** pauses, *Save Game → Slot 1* writes the save, *Resume* returns
 * a baseball bat swing (left mouse) hurts a neighbour, who flees
 * *Load Game → Slot 1* restores position and clock
@@ -78,7 +88,7 @@ target. Checks:
   now offers *Continue*
 * no uncaught page errors and no errors in the game loop
 
-Last run: **56 of 56 checks passed** in 524 s (most of the time is the
+Last run: **72 of 72 checks passed** in 567 s (most of the time is the
 software renderer drawing frames). The run log is printed to the console and
 saved as `e2e/out/e2e-results.json`.
 
@@ -174,6 +184,9 @@ the game on real hardware (the FPS counter is in *Settings → Graphics*).
   with a legend.
 * Save results were shown on the hidden HUD while the pause menu was open,
   and failed autosaves were silent.
+* The crowbar's description promised prying doors and windows open, which was
+  not implemented; cigarettes were sold but had no use (now: offer one to a
+  smoker for rumours).
 
 ## Known limitations
 

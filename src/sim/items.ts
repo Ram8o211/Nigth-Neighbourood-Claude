@@ -103,7 +103,7 @@ export const ITEMS: Record<string, ItemDef> = {
   jewelry: { id: 'jewelry', name: 'Jewellery', cat: 'valuable', price: 35, stack: 3, desc: 'A tangle of necklaces and rings.' },
   silverware: { id: 'silverware', name: 'Silverware', cat: 'valuable', price: 15, stack: 3, desc: 'Polished forks and spoons.' },
   cash: { id: 'cash', name: 'Cash', cat: 'valuable', price: 1, stack: 999, desc: 'Money.' },
-  cigarettes: { id: 'cigarettes', name: 'Cigarettes', cat: 'misc', price: 5, stack: 3, desc: 'A pack of Red Crow cigarettes.' },
+  cigarettes: { id: 'cigarettes', name: 'Cigarettes', cat: 'misc', price: 5, stack: 3, desc: 'A pack of Red Crow cigarettes. Smokers talk more freely over one.' },
   key: { id: 'key', name: 'Key', cat: 'key', price: 0, stack: 1, desc: 'Opens a door somewhere.' },
   evidence: { id: 'evidence', name: 'Evidence', cat: 'evidence', price: 0, stack: 1, desc: 'Something important.' },
   note: { id: 'note', name: 'Note', cat: 'misc', price: 0, stack: 1, desc: 'A handwritten note.' },

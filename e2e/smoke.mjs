@@ -218,6 +218,116 @@ export default async function smoke(page, h) {
   const tAfter = (await state()).time;
   check('waiting advances the clock ~1h', tAfter - tBefore > 3000, `${((tAfter - tBefore) / 60).toFixed(0)} game minutes`);
 
+  // ---------------------------------------------------------------- shopping: buy a flashlight at the hardware store
+  const shop = await h.eval(() => {
+    const s = window.__game.sim;
+    const b = s.world.buildings.find((b) => b.kind === 'hardware');
+    const reg = s.world.furniture.find((f) => f.buildingId === b.id && f.use === 'register' && f.kind !== 'none');
+    let keeper = window.__game.player.keeperAt(reg);
+    if (!keeper) {
+      // the clerk is still on the way to work: put them behind the counter (test assist)
+      const clerk = s.npcs.find((n) => n.alive && n.workId === b.id && n.role !== 'killer') ?? s.npcs.find((n) => n.alive && n.workId === b.id);
+      clerk.tasks = [];
+      clerk.path = null;
+      clerk.x = reg.ux;
+      clerk.z = reg.uz;
+      clerk.y = s.grid.heightAt(reg.ux, reg.uz);
+      clerk.room = s.grid.roomAt(reg.ux, reg.uz);
+      clerk.building = b.id;
+      clerk.sleeping = false;
+      clerk.usingFurniture = reg.id;
+      clerk.activity = { kind: 'work', priority: 35, started: s.time, until: s.time + 4 * 3600, data: {} };
+      keeper = clerk;
+    }
+    // counters stand against a wall: the customer steps up beside the clerk
+    const spot = window.__nnTest.spotNear(reg.ux, reg.uz, 0.9, 1.8, b.id);
+    return { reg: { x: reg.x, z: reg.z, h: reg.h, y: b.floorY }, spot, keeper: keeper.id };
+  });
+  check('hardware store has a counter and a clerk', shop.spot && shop.keeper >= 0);
+  if (shop.spot) {
+    await stand(shop.spot.x, shop.spot.z, shop.reg.x, shop.reg.y + shop.reg.h * 0.7, shop.reg.z);
+    await h.frames(1);
+    s = await state();
+    check('counter targeted', s.target?.kind === 'furniture' && /counter/.test(s.target.prompt), s.target?.prompt);
+    await h.tap('KeyE');
+    await h.frames(1);
+    const tradeOpen = (await page.locator('#layer .item-row').count()) > 0;
+    check('E at the counter opens the shop', tradeOpen);
+    if (tradeOpen) {
+      await h.shot('09a_shop');
+      const money0 = await h.eval(() => window.__game.sim.player.money);
+      await page.locator('#layer .item-row').filter({ has: page.locator('.name', { hasText: /^Flashlight/ }) }).locator('button', { hasText: 'Buy' }).first().click();
+      await page.waitForTimeout(100);
+      const after = await h.eval(() => ({ money: window.__game.sim.player.money, has: window.__game.sim.player.inventory.some((i) => i.item === 'flashlight') }));
+      check('buying the flashlight takes the money and adds it to the inventory', after.has && after.money === money0 - 18, `$${money0} -> $${after.money}`);
+      await h.clickText('Done');
+      await h.frames(3);
+      const objs = await page.locator('.objectives').innerText();
+      check('the flashlight objective is done', !/Buy a flashlight/.test(objs), objs.replace(/\n/g, ' | '));
+      await h.tap('KeyF');
+      check('F switches the flashlight on', await h.eval(() => window.__game.sim.player.flashlight));
+      await h.tap('KeyF');
+      check('F switches it off again', !(await h.eval(() => window.__game.sim.player.flashlight)));
+    }
+  }
+
+  // ---------------------------------------------------------------- the telephone at home
+  const phone = await h.eval(() => {
+    const s = window.__game.sim;
+    const f = s.world.furniture.find((f) => f.buildingId === s.world.playerHouseId && f.use === 'phone' && f.kind !== 'none');
+    if (!f) return null;
+    const spot = window.__nnTest.spotNear(f.ux, f.uz, 0, 1, s.world.playerHouseId);
+    return { x: f.x, z: f.z, h: f.h, y: s.world.buildings[f.buildingId].floorY, spot };
+  });
+  check('the house has a telephone', !!phone?.spot);
+  if (phone?.spot) {
+    await stand(phone.spot.x, phone.spot.z, phone.x, phone.y + phone.h * 0.8, phone.z);
+    await h.frames(1);
+    s = await state();
+    check('telephone targeted', s.target?.prompt?.includes('Call the police'), s.target?.prompt);
+    await h.tap('KeyE');
+    await h.frames(1);
+    check('E on the telephone dials the police', await h.hasText('Ask about the investigation'));
+    if (await h.hasText('Ask about the investigation')) {
+      await h.clickText('Ask about the investigation');
+      await page.waitForTimeout(100);
+      const txt = await page.locator('#layer').innerText();
+      check('the police answer about the investigation', txt.length > 40, txt.slice(0, 80).replace(/\n/g, ' | '));
+      await h.clickText('Hang up');
+      await h.frames(1);
+    }
+  }
+
+  // ---------------------------------------------------------------- the police chief
+  const chief = await h.eval(() => {
+    const s = window.__game.sim;
+    const c = s.npcs.find((n) => n.job === 'chief' && n.alive);
+    const spot = window.__nnTest.spotNear(c.x, c.z, 1.2, 2.0, c.building >= 0 ? c.building : undefined);
+    return { id: c.id, x: c.x, z: c.z, y: c.y, spot };
+  });
+  if (chief.spot) {
+    await stand(chief.spot.x, chief.spot.z, chief.x, chief.y + 1.5, chief.z);
+    await h.frames(1);
+    s = await state();
+    check('police chief targeted', s.target?.kind === 'npc' && s.target.id === chief.id, s.target?.prompt);
+    await h.tap('KeyE');
+    await h.frames(1);
+    const progress = (await page.locator('#layer .options button').allInnerTexts()).find((o) => o.includes('Any progress'));
+    check('the chief can be asked about the case', !!progress);
+    if (progress) {
+      await h.clickText('Any progress');
+      await page.waitForTimeout(100);
+      const say = await page.locator('#layer .say').innerText();
+      check('the chief answers', say.length > 10, say.slice(0, 80).replace(/\n/g, ' | '));
+    }
+    await h.tap('Escape');
+    await h.frames(2);
+    if ((await state()).mode !== 'playing') await h.eval(() => window.__game.ui.closeDialog());
+  } else check('found a spot next to the chief', false);
+  // back home before the next steps (fighting in front of the police station would end in an arrest)
+  await stand(home.of.x, home.of.z, home.door.x, home.floorY + 1.2, home.door.z);
+  await h.frames(2);
+
   // ---------------------------------------------------------------- save, pause menu
   await h.tap('Escape');
   await h.frames(1);
@@ -267,6 +377,29 @@ export default async function smoke(page, h) {
     check('swinging a bat at a neighbour hurts them', after.hp < target.hp, `hp ${target.hp} -> ${after.hp.toFixed(0)}, reaction=${after.act}`);
     await h.shot('10_combat');
   }
+
+  // ---------------------------------------------------------------- a crowbar pries a locked door open
+  const door = await h.eval(() => {
+    const s = window.__game.sim;
+    const p = s.player;
+    p.inventory.push({ item: 'crowbar', n: 1 });
+    const b = s.world.buildings.filter((b) => b.kind === 'house' && b.id !== s.world.playerHouseId).sort((a, c) => Math.hypot(a.outsideFront.x - p.x, a.outsideFront.z - p.z) - Math.hypot(c.outsideFront.x - p.x, c.outsideFront.z - p.z))[0];
+    const d = s.world.doors[b.frontDoorId];
+    d.locked = true;
+    d.target = 0;
+    d.open = 0;
+    const out = d.roomPos >= 0 ? -1 : 1;
+    const x = d.axis === 'x' ? d.t : d.c + out * 1.1;
+    const z = d.axis === 'x' ? d.c + out * 1.1 : d.t;
+    return { id: d.id, x, z, dx: d.axis === 'x' ? d.t : d.c, dz: d.axis === 'x' ? d.c : d.t, y: b.floorY };
+  });
+  await stand(door.x, door.z, door.dx, door.y + 1.2, door.dz);
+  await h.frames(1);
+  s = await state();
+  check('a locked door offers prying with a crowbar', /Pry/.test(s.target?.prompt ?? ''), s.target?.prompt);
+  await h.holdFrames('KeyE', 30);
+  const pried = await h.eval((id) => ({ locked: window.__game.sim.world.doors[id].locked, forced: window.__game.sim.forcedDoors.includes(id) }), door.id);
+  check('holding E pries the door open (and leaves marks)', !pried.locked && pried.forced, JSON.stringify(pried));
 
   // ---------------------------------------------------------------- load
   await h.tap('Escape');

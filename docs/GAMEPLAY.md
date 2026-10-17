@@ -62,7 +62,8 @@ Each morning the game autosaves.
 * **Testimony** – ask residents what they saw. Answers come from the NPC's
   actual memories and say how they know: *"I saw…"* (witnessed), *"I heard…"*
   (heard only), *"X told me…"* (hearsay, less reliable). Ask where they were
-  last night for alibis, who wears a particular coat, who smokes.
+  last night for alibis, who wears a particular coat, who smokes. Offer a
+  smoker a cigarette and they pass on the rumours they have heard.
 * **The police chief** – *Any progress on the case?* gives you the case
   files: what was reported where, witness descriptions, suspects and persons
   of interest (somebody seen prowling or trespassing).
@@ -96,7 +97,10 @@ Each morning the game autosaves.
 ## Combat
 
 Melee only. Weapons: fists, kitchen knife (fast, makes victims bleed), baseball
-bat (slow, heavy, knocks down), crowbar, police baton.
+bat (slow, heavy, knocks down), crowbar, police baton. Outside the fight, a
+crowbar in your pocket lets you hold E to pry a locked door or a closed window
+open: faster than a lockpick, but loud, and anyone who sees it remembers a
+break-in.
 Left mouse attacks with a wind-up and cooldown, right mouse blocks (reduces
 damage when facing the attacker), Space dodges. Hits are resolved against
 actual geometry: you cannot hit through walls or closed doors, but swings
@@ -119,7 +123,7 @@ All keys can be rebound in *Settings → Controls*.
 | Arrow keys | Look without a mouse |
 | Shift | Sprint |
 | C | Crouch / sneak (toggle) |
-| E | Interact – doors, items, furniture, people. **Hold** for alternatives: lock/unlock, pick locks, board windows, drag bodies, search wardrobes |
+| E | Interact – doors, items, furniture, people. **Hold** for alternatives: lock/unlock, pick locks, pry with a crowbar, board windows, drag bodies, search wardrobes |
 | Left mouse | Attack |
 | Right mouse | Block |
 | Space | Dodge |

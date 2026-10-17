@@ -964,6 +964,29 @@ export class Game {
         say(lines);
       },
     });
+    // a cigarette shared with a smoker loosens their tongue: they pass on what they have heard
+    if (n.smoker && this.player!.count('cigarettes') && n.ctl.cigDay !== sim.day()) {
+      opts.push({
+        text: 'Offer a cigarette.',
+        action: () => {
+          this.player!.take('cigarettes');
+          n.ctl.cigDay = sim.day();
+          n.suspicionOfPlayer = Math.max(0, n.suspicionOfPlayer - 0.2);
+          const talk = n.role === 'killer' ? [] : n.memories
+            .filter((m) => (m.source === 'told' || m.topic === 'prowler' || m.topic === 'leftHome') && m.actor !== n.id)
+            .sort((a, b) => importanceOf(b) - importanceOf(a) || b.time - a.time)
+            .slice(0, 2);
+          let gained = 0;
+          const lines = ['Thanks. Don\'t mind if I do.', ...talk.map((m) => {
+            gained += j.addTestimony(n, m);
+            return this.memoryLine(n, m);
+          })];
+          if (!talk.length) lines.push("Haven't heard anything worth repeating, though.");
+          if (gained) lines.push(`(Journal updated: ${gained} new detail${gained > 1 ? 's' : ''})`);
+          say(lines);
+        },
+      });
+    }
     const known = [...j.residents.values()].filter((r) => r.named && r.id !== n.id);
     if (known.length) {
       opts.push({

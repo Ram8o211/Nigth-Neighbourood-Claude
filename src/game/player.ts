@@ -5,7 +5,7 @@ import type { Furniture, ItemStack } from '../world/types';
 import { ITEMS, itemName } from '../sim/items';
 import { moveActor, updateLocation } from '../sim/movement';
 import { startAttack, kill } from '../sim/combat';
-import { hearSound } from '../sim/perception';
+import { hearSound, witnessAct } from '../sim/perception';
 import type { Input } from './input';
 import { CFG } from '../sim/config';
 import { fullName } from '../sim/population';
@@ -32,7 +32,7 @@ export interface PlayerHooks {
   wash(): void;
 }
 
-const HOLD_TIME: Record<string, number> = { lockpick: 4.5, board: 2.8, lock: 0.5, drag: 0.6 };
+const HOLD_TIME: Record<string, number> = { lockpick: 4.5, board: 2.8, lock: 0.5, drag: 0.6, pry: 2.2 };
 
 /** first person controller: movement, interaction, combat and needs */
 export class PlayerController {
@@ -431,7 +431,16 @@ export class PlayerController {
       if (d.broken) prompt = 'The door hangs off its hinges';
       else if (d.open > 0.5) prompt = '[E] Close door';
       else if (d.locked) {
-        prompt = key || (inside && d.exterior) ? '[E] Unlock and open' : this.count('lockpick') ? '[Hold E] Pick the lock' : d.bars ? 'Cell door (locked)' : '[E] Knock';
+        prompt =
+          key || (inside && d.exterior)
+            ? '[E] Unlock and open'
+            : this.count('lockpick')
+              ? '[Hold E] Pick the lock'
+              : d.bars
+                ? 'Cell door (locked)'
+                : this.count('crowbar')
+                  ? '[E] Knock   [Hold E] Pry the door open'
+                  : '[E] Knock';
       } else {
         prompt = '[E] Open door';
         if ((key || inside) && !d.bars) alt = '[Hold E] Lock';
@@ -448,6 +457,7 @@ export class PlayerController {
       if (w.boarded) prompt = inside ? 'Boarded up' : 'Boarded up from inside';
       else if (w.damage === 2) prompt = w.width >= 1 && w.sill < 1.3 ? '[E] Climb through the window' : 'Broken window';
       else if (inside && this.count('planks')) prompt = '[Hold E] Board up window (planks)';
+      else if (!inside && w.damage < 2 && this.count('crowbar')) prompt = '[Hold E] Pry the window open';
       else prompt = w.damage === 1 ? 'Cracked window' : '';
       if (prompt) consider('window', w.id, x, z, fy + (w.sill + w.top) / 2, 2.0, prompt, '', true);
     }
@@ -554,11 +564,14 @@ export class PlayerController {
     let hold = '';
     if (t.kind === 'door') {
       const d = this.sim.world.doors[t.id];
-      if (!d.broken && d.locked && !this.sim.playerHasKey(d.keyId) && !(this.p.building === d.buildingId && d.exterior) && this.count('lockpick')) hold = 'lockpick';
+      const outsideLocked = !d.broken && d.locked && !this.sim.playerHasKey(d.keyId) && !(this.p.building === d.buildingId && d.exterior);
+      if (outsideLocked && this.count('lockpick')) hold = 'lockpick';
+      else if (outsideLocked && !d.bars && this.count('crowbar')) hold = 'pry';
       else if (!d.broken && d.open < 0.5 && !d.locked && !d.bars && (this.sim.playerHasKey(d.keyId) || this.p.building === d.buildingId)) hold = 'lock';
     } else if (t.kind === 'window') {
       const w = this.sim.world.windows[t.id];
       if (!w.boarded && w.damage < 2 && this.p.building === w.buildingId && this.count('planks')) hold = 'board';
+      else if (!w.boarded && w.damage < 2 && this.p.building !== w.buildingId && this.count('crowbar')) hold = 'pry';
     } else if (t.kind === 'body') hold = 'drag';
     else if (t.kind === 'furniture') {
       const f = this.sim.world.furniture[t.id];
@@ -658,6 +671,28 @@ export class PlayerController {
           this.hooks.message('The lock gives with a click.', 'good');
           sim.markForced(d.id);
         } else this.hooks.message('The pick slips. Try again.', 'warn');
+        return;
+      }
+      case 'pry': {
+        // loud and visible: neighbours hear it, anyone watching remembers a break-in
+        if (t.kind === 'door') {
+          const d = sim.world.doors[t.id];
+          const x = d.axis === 'x' ? d.t : d.c;
+          const z = d.axis === 'x' ? d.c : d.t;
+          d.locked = false;
+          d.target = 1;
+          sim.markForced(d.id);
+          sim.sound('pry', x, z, 12, 0);
+          witnessAct(sim, 0, 'breakin', x, z, -1, -1, 0.6);
+          this.hooks.message('The frame splinters and the door swings open.', 'warn');
+        } else if (t.kind === 'window') {
+          const w = sim.world.windows[t.id];
+          sim.damageWindow(w.id, 999, 0, true);
+          const x = w.axis === 'x' ? w.t : w.c;
+          const z = w.axis === 'x' ? w.c : w.t;
+          witnessAct(sim, 0, 'breakin', x, z, -1, -1, 0.6);
+          this.hooks.message('You lever the window out of its frame.', 'warn');
+        }
         return;
       }
       case 'lock': {

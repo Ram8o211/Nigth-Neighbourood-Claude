@@ -131,6 +131,7 @@ const SOUND_TOPIC: Record<string, MemTopic | null> = {
   knock: 'knock',
   footstep: 'footsteps',
   lockpick: 'footsteps',
+  pry: 'breakin',
 };
 
 /** a sound propagates to listeners. `loud` is the audible radius for an awake listener in metres. */
