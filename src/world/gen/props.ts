@@ -188,7 +188,7 @@ export function decorateHouseLot(ctx: PropCtx, info: LotInfo, alleyBehind: boole
   const sideLine = (lx: number) => {
     const a = L(lx, frontLine + 0.5);
     const c = L(lx, D);
-    const gap: [number, number] = [0.6, 1.9];
+    const gap: [number, number] = [0.5, 2.3];
     ctx.fenceWithGaps(fenceKindSide, a.x, a.z, c.x, c.z, sideH, abandoned ? [gap, [5, 7.5]] : [gap], fenceColor);
   };
   sideLine(W);
@@ -199,7 +199,7 @@ export function decorateHouseLot(ctx: PropCtx, info: LotInfo, alleyBehind: boole
     const a = L(0, D);
     const c = L(W, D);
     const gateX = bl ? (bl.x0 + bl.x1) / 2 : W / 2;
-    const gaps: [number, number][] = alleyBehind ? [[gateX - 0.7, gateX + 0.7]] : [];
+    const gaps: [number, number][] = alleyBehind ? [[gateX - 0.95, gateX + 0.95]] : [];
     if (abandoned) gaps.push([W * 0.7, W * 0.7 + 2]);
     ctx.fenceWithGaps(fenceKindSide === 'hedge' ? 'hedge' : abandoned ? 'fence_wood_broken' : 'fence_wood', a.x, a.z, c.x, c.z, backH, gaps, fenceColor);
     if (alleyBehind && rng.chance(0.7)) {
@@ -212,7 +212,7 @@ export function decorateHouseLot(ctx: PropCtx, info: LotInfo, alleyBehind: boole
   if (frontStyle !== 'none') {
     const a = L(0, 0.15);
     const c = L(W, 0.15);
-    const gaps: [number, number][] = [[walkX - 0.8, walkX + 0.8]];
+    const gaps: [number, number][] = [[walkX - 0.95, walkX + 0.95]];
     if (driveX0 >= 0) gaps.push([driveX0 - 0.2, driveX0 + 3.2]);
     const k = frontStyle === 'hedge_low' ? 'hedge' : frontStyle;
     ctx.fenceWithGaps(k, a.x, a.z, c.x, c.z, frontStyle === 'hedge_low' ? 0.9 : 1.0, gaps, frontStyle.startsWith('fence_picket') ? 0xece8de : fenceColor);

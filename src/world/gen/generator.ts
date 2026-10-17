@@ -24,7 +24,7 @@ import { repairWorld } from './repair';
 
 export const WORLD_VERSION = 3;
 
-export const DEFAULT_PARAMS: GenParams = { seed: 'hollow', size: 'medium', density: 0.85, nights: 5 };
+export const DEFAULT_PARAMS: GenParams = { seed: 'hollow', size: 'medium', density: 0.7, nights: 5 };
 
 const REQUIRED_COMMERCIAL: BuildingKind[] = ['police', 'store', 'diner', 'bar', 'hardware', 'clinic', 'garage'];
 

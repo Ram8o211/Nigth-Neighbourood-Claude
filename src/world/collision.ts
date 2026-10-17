@@ -2,18 +2,13 @@ import type { Rect } from '../core/math';
 import type { WorldData } from './types';
 import { DOOR_W } from './gen/buildings';
 
-export const enum CK {
-  Wall = 0,
-  Door = 1,
-  Window = 2,
-  Furniture = 3,
-  Prop = 4,
-}
+export const CK = { Wall: 0, Door: 1, Window: 2, Furniture: 3, Prop: 4 } as const;
+export type CKind = (typeof CK)[keyof typeof CK];
 
 /** a static or state-dependent axis aligned box collider */
 export interface Collider {
   r: Rect;
-  kind: CK;
+  kind: CKind;
   ref: number;
   /** blocks line of sight / melee */
   sight: boolean;

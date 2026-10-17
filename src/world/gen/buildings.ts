@@ -318,6 +318,7 @@ export function buildBuilding(rng: Rng, world: WorldData, opt: BuildOptions): Bu
       bars,
       hingeLow: rng.chance(0.5),
       open: 0,
+      target: 0,
       openSide,
       locked: bars,
       broken: false,

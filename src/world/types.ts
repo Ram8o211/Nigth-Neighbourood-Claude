@@ -100,7 +100,8 @@ export interface Door {
   /** hinge at the low end (a) or high end (b) of the opening */
   hingeLow: boolean;
   // dynamic state
-  open: number; // 0 closed .. 1 open (target)
+  open: number; // 0 closed .. 1 open (current)
+  target: number; // where the door is moving to
   openSide: 1 | -1; // which way it swings
   locked: boolean;
   broken: boolean;
