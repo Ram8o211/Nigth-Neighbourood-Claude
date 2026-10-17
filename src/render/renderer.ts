@@ -242,7 +242,7 @@ export class GameRenderer {
     this.hemi.color.copy(a.hemiSky);
     this.hemi.groundColor.copy(a.hemiGround);
     // interiors receive less sky light
-    this.hemi.intensity = a.hemiIntensity * (inside ? 0.55 : 1);
+    this.hemi.intensity = a.hemiIntensity * (inside ? 0.72 : 1);
     this.fog.color.copy(a.fogColor);
     this.fog.density = a.fogDensity * (inside ? 0.6 : 1);
     this.renderer.toneMappingExposure = a.exposure;

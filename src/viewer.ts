@@ -2,6 +2,9 @@
 import * as THREE from 'three';
 import { generateWorld } from './world/gen/generator';
 import { GameRenderer } from './render/renderer';
+import { Simulation } from './sim/simulation';
+import { buildRig, dressRig, animateRig, type Rig } from './render/characters';
+import type { NpcState } from './sim/types';
 
 export function runViewer(params: URLSearchParams) {
   const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -38,10 +41,41 @@ export function runViewer(params: URLSearchParams) {
     yaw = Math.atan2(-dx, -dz);
     pitch = -0.05;
   }
+  // character line-up in the street in front of the camera
+  const lineup: { rig: Rig; n: NpcState }[] = [];
+  if (params.get('lineup')) {
+    const sim = new Simulation(world);
+    sim.populate();
+    const count = Math.min(sim.npcs.length, parseInt(params.get('lineup') ?? '8', 10) || 8);
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    const rx = Math.cos(yaw);
+    const rz = -Math.sin(yaw);
+    for (let i = 0; i < count; i++) {
+      const n = sim.npcs[i];
+      const rig = buildRig(n.app, n.role === 'police');
+      const off = (i - (count - 1) / 2) * 0.95;
+      const dist = parseFloat(params.get('dist') ?? '4.2');
+      n.x = pos.x + fx * dist + rx * off;
+      n.z = pos.z + fz * dist + rz * off;
+      n.y = 0;
+      n.yaw = Math.atan2(pos.x - n.x, -(pos.z - n.z));
+      n.anim = 'idle';
+      n.speed = 0;
+      n.outfit = params.get('outfit') === 'night' && n.role === 'killer' ? 'night' : 'day';
+      n.y = sim.grid.heightAt(n.x, n.z);
+      rig.root.position.set(n.x, n.y, n.z);
+      rig.root.rotation.y = -n.yaw;
+      dressRig(rig, n, true);
+      r.layers.add(rig.root);
+      lineup.push({ rig, n });
+    }
+  }
   const fl = params.get('flash') === '1';
   let t = 0;
   const frame = () => {
     t += 1 / 60;
+    for (const { rig, n } of lineup) animateRig(rig, n, 1 / 60, t, 0);
     r.render({ pos, yaw, pitch, roll: 0, fov: 72, hour, time: t, insideBuilding: params.get('look') === 'inside' ? home.id : -1, flashlight: fl, flashPower: 1, damage: 0, fear: 0, lowHealth: 0, blur: 0 });
     (window as unknown as { __frames: number }).__frames = ((window as unknown as { __frames: number }).__frames ?? 0) + 1;
     requestAnimationFrame(frame);

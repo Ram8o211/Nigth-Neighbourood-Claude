@@ -14,6 +14,30 @@ function mat(color: number, emissive = 0): THREE.MeshLambertMaterial {
 }
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
+/**
+ * Unit cube with rounded edges: vertices are pulled towards a sphere. Keeps
+ * the box's six material groups and UVs (the face texture stays on the front).
+ */
+function roundedBox(seg: number, k: number) {
+  const g = new THREE.BoxGeometry(1, 1, 1, seg, seg, seg);
+  const p = g.attributes.position as THREE.BufferAttribute;
+  const v = new THREE.Vector3();
+  const t = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    if (v.lengthSq() < 1e-9) continue;
+    // blend each vertex towards the inscribed sphere: face centres stay, edges and corners soften
+    t.copy(v).normalize().multiplyScalar(0.5);
+    v.lerp(t, k);
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+const softGeo = roundedBox(3, 0.6);
+const coatGeo = roundedBox(3, 0.35);
+const headGeo = roundedBox(4, 0.75);
+
 function shade(c: number, f: number) {
   const r = Math.min(255, Math.round(((c >> 16) & 255) * f));
   const g = Math.min(255, Math.round(((c >> 8) & 255) * f));
@@ -23,7 +47,7 @@ function shade(c: number, f: number) {
 
 /** a box mesh whose origin sits at its top centre so it hangs from a joint */
 function hanging(w: number, h: number, d: number, m: THREE.Material) {
-  const mesh = new THREE.Mesh(boxGeo, m);
+  const mesh = new THREE.Mesh(softGeo, m);
   mesh.scale.set(w, h, d);
   mesh.position.y = -h / 2;
   mesh.castShadow = true;
@@ -46,6 +70,9 @@ export interface Rig {
   shinR: THREE.Group;
   coat: THREE.Mesh;
   shirt: THREE.Mesh;
+  /** upper and lower arm meshes: shirt colour indoors, coat colour outside */
+  sleeves: THREE.Mesh[];
+  shirtMat: THREE.Material;
   hood: THREE.Mesh;
   hair: THREE.Object3D;
   hand: THREE.Group; // right hand attach point
@@ -124,7 +151,7 @@ export function buildRig(app: Appearance, police: boolean): Rig {
   const skin = mat(app.skin);
   const shoeC = app.shoes === 'boots' ? 0x3a2616 : app.shoes === 'dress' ? 0x111111 : 0xd8d8d0;
   // pelvis
-  const pelvis = new THREE.Mesh(boxGeo, pants);
+  const pelvis = new THREE.Mesh(softGeo, pants);
   pelvis.scale.set(0.34 * bw, 0.18 * s, 0.2 * bw);
   pelvis.position.y = 0.02;
   pelvis.castShadow = true;
@@ -139,7 +166,7 @@ export function buildRig(app: Appearance, police: boolean): Rig {
     shin.position.y = -0.44 * s;
     leg.add(shin);
     shin.add(hanging(0.12 * bw, 0.4 * s, 0.13 * bw, pants));
-    const shoe = new THREE.Mesh(boxGeo, mat(shoeC));
+    const shoe = new THREE.Mesh(softGeo, mat(shoeC));
     shoe.scale.set(0.12 * bw, 0.08, 0.26);
     shoe.position.set(0, -0.4 * s - 0.03, -0.05);
     shoe.castShadow = true;
@@ -152,18 +179,18 @@ export function buildRig(app: Appearance, police: boolean): Rig {
   const torso = new THREE.Group();
   torso.position.y = 0.08;
   hips.add(torso);
-  const shirt = new THREE.Mesh(boxGeo, shirtM);
+  const shirt = new THREE.Mesh(softGeo, shirtM);
   shirt.scale.set(0.4 * bw, 0.56 * s, 0.24 * bw);
   shirt.position.y = 0.28 * s;
   shirt.castShadow = true;
   torso.add(shirt);
-  const coat = new THREE.Mesh(boxGeo, mat(police ? 0x23304a : app.coat));
-  coat.scale.set(0.45 * bw, 0.78 * s, 0.29 * bw);
-  coat.position.y = 0.2 * s;
+  const coat = new THREE.Mesh(coatGeo, mat(police ? 0x23304a : app.coat));
+  coat.scale.set(0.44 * bw, 0.74 * s, 0.28 * bw);
+  coat.position.y = 0.23 * s;
   coat.castShadow = true;
   torso.add(coat);
   if (police) {
-    const badge = new THREE.Mesh(boxGeo, mat(0xd8b040, 0x221a00));
+    const badge = new THREE.Mesh(softGeo, mat(0xd8b040, 0x221a00));
     badge.scale.set(0.06, 0.07, 0.01);
     badge.position.set(-0.11 * bw, 0.45 * s, -0.15 * bw);
     torso.add(badge);
@@ -172,12 +199,12 @@ export function buildRig(app: Appearance, police: boolean): Rig {
   const head = new THREE.Group();
   head.position.y = 0.6 * s;
   torso.add(head);
-  const neck = new THREE.Mesh(boxGeo, skin);
+  const neck = new THREE.Mesh(softGeo, skin);
   neck.scale.set(0.1, 0.1, 0.1);
   neck.position.y = 0.03;
   head.add(neck);
   const faceMat = new THREE.MeshLambertMaterial({ map: faceTexture(app.skin, app.face) });
-  const headMesh = new THREE.Mesh(boxGeo, [skin, skin, skin, skin, skin, faceMat]);
+  const headMesh = new THREE.Mesh(headGeo, [skin, skin, skin, skin, skin, faceMat]);
   headMesh.scale.set(0.22, 0.26, 0.23);
   headMesh.position.y = 0.2;
   headMesh.castShadow = true;
@@ -185,36 +212,36 @@ export function buildRig(app: Appearance, police: boolean): Rig {
   let hair: THREE.Object3D = new THREE.Group();
   const hm = mat(app.hair);
   if (police) {
-    const cap = new THREE.Mesh(boxGeo, mat(0x1c2433));
+    const cap = new THREE.Mesh(softGeo, mat(0x1c2433));
     cap.scale.set(0.25, 0.08, 0.26);
     cap.position.y = 0.36;
-    const brim = new THREE.Mesh(boxGeo, mat(0x111111));
+    const brim = new THREE.Mesh(softGeo, mat(0x111111));
     brim.scale.set(0.24, 0.02, 0.1);
     brim.position.set(0, 0.32, -0.15);
     hair = new THREE.Group();
     hair.add(cap, brim);
   } else if (app.hairStyle === 'cap') {
-    const cap = new THREE.Mesh(boxGeo, mat(shade(app.coat, 1.4)));
+    const cap = new THREE.Mesh(softGeo, mat(shade(app.coat, 1.4)));
     cap.scale.set(0.24, 0.08, 0.25);
     cap.position.y = 0.35;
-    const brim = new THREE.Mesh(boxGeo, mat(shade(app.coat, 1.2)));
+    const brim = new THREE.Mesh(softGeo, mat(shade(app.coat, 1.2)));
     brim.scale.set(0.2, 0.02, 0.12);
     brim.position.set(0, 0.32, -0.16);
     hair = new THREE.Group();
     hair.add(cap, brim);
   } else if (app.hairStyle !== 'bald') {
     const g = new THREE.Group();
-    const top = new THREE.Mesh(boxGeo, hm);
+    const top = new THREE.Mesh(softGeo, hm);
     top.scale.set(0.24, 0.07, 0.25);
     top.position.y = 0.345;
     g.add(top);
-    const back = new THREE.Mesh(boxGeo, hm);
+    const back = new THREE.Mesh(softGeo, hm);
     const long = app.hairStyle === 'long';
     back.scale.set(0.24, long ? 0.34 : 0.18, 0.07);
     back.position.set(0, long ? 0.16 : 0.24, 0.11);
     g.add(back);
     if (app.hairStyle === 'bun') {
-      const bun = new THREE.Mesh(boxGeo, hm);
+      const bun = new THREE.Mesh(softGeo, hm);
       bun.scale.set(0.1, 0.1, 0.1);
       bun.position.set(0, 0.36, 0.14);
       g.add(bun);
@@ -223,23 +250,30 @@ export function buildRig(app: Appearance, police: boolean): Rig {
   }
   head.add(hair);
   if (app.beard) {
-    const beard = new THREE.Mesh(boxGeo, hm);
+    const beard = new THREE.Mesh(softGeo, hm);
     beard.scale.set(0.2, 0.09, 0.03);
     beard.position.set(0, 0.1, -0.11);
     head.add(beard);
   }
   if (app.glasses) {
-    const gl = new THREE.Mesh(boxGeo, mat(0x1a1a1a));
-    gl.scale.set(0.2, 0.035, 0.01);
-    gl.position.set(0, 0.215, -0.12);
-    head.add(gl);
+    // two thin rims and a bridge
+    for (const sx of [-1, 1]) {
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.006, 4, 10), mat(0x1a1a1a));
+      rim.position.set(sx * 0.05, 0.215, -0.118);
+      head.add(rim);
+    }
+    const bridge = new THREE.Mesh(boxGeo, mat(0x1a1a1a));
+    bridge.scale.set(0.04, 0.008, 0.008);
+    bridge.position.set(0, 0.22, -0.118);
+    head.add(bridge);
   }
-  const hood = new THREE.Mesh(boxGeo, mat(shade(app.coat, 0.7)));
+  const hood = new THREE.Mesh(softGeo, mat(shade(app.coat, 0.7)));
   hood.scale.set(0.28, 0.32, 0.29);
   hood.position.set(0, 0.22, 0.02);
   hood.visible = false;
   head.add(hood);
   // arms
+  const sleeves: THREE.Mesh[] = [];
   const mkArm = (side: number) => {
     const arm = new THREE.Group();
     arm.position.set(side * 0.25 * bw, 0.54 * s, 0);
@@ -249,8 +283,10 @@ export function buildRig(app: Appearance, police: boolean): Rig {
     const fore = new THREE.Group();
     fore.position.y = -0.32 * s;
     arm.add(fore);
-    fore.add(hanging(0.1 * bw, 0.28 * s, 0.1 * bw, shirtM));
-    const handM = new THREE.Mesh(boxGeo, skin);
+    const lower = hanging(0.1 * bw, 0.28 * s, 0.1 * bw, shirtM);
+    fore.add(lower);
+    sleeves.push(upper, lower);
+    const handM = new THREE.Mesh(softGeo, skin);
     handM.scale.set(0.08, 0.09, 0.08);
     handM.position.y = -0.32 * s;
     fore.add(handM);
@@ -292,6 +328,8 @@ export function buildRig(app: Appearance, police: boolean): Rig {
     shinR: R.shin,
     coat,
     shirt,
+    sleeves,
+    shirtMat: shirtM,
     hood,
     hair,
     hand: AR.hand,
@@ -490,6 +528,8 @@ export function dressRig(r: Rig, a: ActorState, outdoors: boolean) {
     } else if (npc.app) {
       r.coat.material = mat(npc.role === 'police' ? 0x23304a : npc.app.coat);
     }
+    const sleeve = r.coat.visible ? r.coat.material : r.shirtMat;
+    for (const m of r.sleeves) m.material = sleeve;
   }
   let item = '';
   if (a.alive) {
