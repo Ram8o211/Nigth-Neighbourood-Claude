@@ -27,7 +27,7 @@ import { updateCombat, combatTask as combatTaskFn, kill } from './combat';
 import { updateLocation, moveActor } from './movement';
 import { killerThink, huntTask, watchTask, knockTask, huntReturnTask, type HuntPlan } from './killer';
 import { burglarThink, burgleTask } from './burglar';
-import { policeThink, policeReact as policeReactFn, policeTask, policeCall as policeCallFn, rememberArrest } from './police';
+import { policeThink, policeReact as policeReactFn, policeTask, policeCall as policeCallFn, rememberArrest, evaluateCase } from './police';
 import { placeName, descText, remember } from './memory';
 import { flickerLevel } from './lightlevel';
 
@@ -1105,6 +1105,8 @@ export class Simulation {
       this.updateLights();
     }
     if (prevHour < 8 && this.hour() >= 8) this.dailyChecks();
+    // detectives go over their case files once an hour
+    if (Math.floor(prevHour) !== Math.floor(this.hour())) for (const c of this.cases) if (c.status === 'open' || c.status === 'investigating') evaluateCase(this, c);
     // the coroner collects examined bodies after a while
     for (const a of this.actors) {
       if (a.alive || a.bodyRemoved || a.ctl.examined === undefined) continue;

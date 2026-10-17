@@ -6,7 +6,7 @@ import { setActivity, inWindow } from './brain';
 import { combatTask } from './combat';
 import { visibility } from './perception';
 import { fullName } from './population';
-import { remember } from './memory';
+import { remember, trueDescription } from './memory';
 
 const SERIOUS: MemTopic[] = ['murder', 'body', 'attack', 'breakin', 'trespass', 'prowler', 'glass', 'scream', 'fight', 'missing', 'theft', 'blood'];
 const PRIORITY: Partial<Record<MemTopic, number>> = { murder: 3, body: 3, attack: 3, missing: 2, breakin: 2, scream: 2, fight: 2, theft: 1, glass: 1, prowler: 1, trespass: 1, blood: 1 };
@@ -90,11 +90,20 @@ function IMPORTANT(m: Memory) {
 /** weigh identified suspects reported by witnesses */
 export function evaluateCase(sim: Simulation, c: PoliceCase) {
   const score = new Map<number, number>();
-  for (const r of c.reports) {
-    if (r.actor < 0) continue;
-    // eyewitnesses of violence carry weight; glimpses of a prowler or a weapon only make someone a person of interest
-    const w = r.topic === 'murder' || r.topic === 'attack' ? 1 : r.topic === 'breakin' || r.topic === 'theft' ? 0.7 : r.topic === 'blood' ? 0.25 : 0.12;
-    score.set(r.actor, (score.get(r.actor) ?? 0) + r.confidence * w);
+  // detectives also read the files of other open cases from the same couple of days
+  const related = sim.cases.filter((k) => k === c || (k.status !== 'closed' && Math.abs(k.opened - c.opened) < 48 * 3600));
+  const seen = new Set<string>();
+  for (const k of related) {
+    for (const r of k.reports) {
+      if (r.actor < 0) continue;
+      const key = `${r.from}:${r.actor}:${r.topic}:${Math.round(r.time / 600)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      // eyewitnesses of violence carry weight; glimpses of a prowler or a weapon only make someone a person of interest,
+      // unless they were hooded and armed in the middle of the night
+      const w = r.topic === 'murder' || r.topic === 'attack' ? 1 : r.topic === 'breakin' || r.topic === 'theft' ? 0.7 : r.topic === 'weapon' && r.desc.hood ? 0.35 : r.topic === 'blood' ? 0.25 : 0.12;
+      score.set(r.actor, (score.get(r.actor) ?? 0) + r.confidence * w * (k === c ? 1 : 0.8));
+    }
   }
   let best = -1;
   let bs = 0;
@@ -102,12 +111,59 @@ export function evaluateCase(sim: Simulation, c: PoliceCase) {
     bs = s;
     best = a;
   }
+  if (bs < 0.9) {
+    const d = describedSuspect(sim, c);
+    if (d) {
+      best = d.id;
+      bs = d.score;
+    }
+  }
   if (best >= 0 && bs >= 0.9 && sim.actors[best]?.alive && !sim.actors[best].inCustody) {
     if (c.suspect !== best) sim.emit({ type: 'police', s: 'suspect', a: best, text: '' });
     c.suspect = best;
     c.suspectScore = bs;
     if (c.status !== 'closed') c.status = 'suspect';
   }
+}
+
+const DESCRIBED: MemTopic[] = ['murder', 'attack', 'breakin', 'theft', 'prowler', 'weapon'];
+const DESC_KEYS = ['height', 'coat', 'hair', 'shoes', 'build'] as const;
+
+/**
+ * Nobody was named, but witnesses described someone. After some investigation
+ * the police pick a suspect when the descriptions fit exactly one person: two
+ * witnesses agreeing on three traits, or one witness who saw four.
+ */
+function describedSuspect(sim: Simulation, c: PoliceCase): { id: number; score: number } | null {
+  if (c.kind === 'missing person' || sim.time - c.opened < 4 * 3600) return null;
+  const reps = c.reports.filter((r) => r.actor < 0 && DESCRIBED.includes(r.topic) && r.confidence >= 0.3 && DESC_KEYS.some((k) => r.desc[k] !== undefined));
+  const witnesses = new Set(reps.map((r) => r.from)).size;
+  if (!witnesses) return null;
+  const fits: { id: number; w: number }[] = [];
+  for (const a of sim.actors) {
+    if (!a.alive || a.inCustody) continue;
+    if (a.kind === 'npc' && (a as NpcState).role === 'police') continue;
+    const truth = trueDescription(sim, a);
+    const attrs = new Set<string>();
+    let w = 0;
+    let conflict = false;
+    for (const r of reps) {
+      for (const k of DESC_KEYS) {
+        const v = r.desc[k];
+        if (v === undefined) continue;
+        if (truth[k] !== v) conflict = true;
+        else {
+          attrs.add(k);
+          w += r.confidence;
+        }
+      }
+      if (conflict) break;
+    }
+    // two witnesses agreeing on three traits, or one witness who saw four
+    if (!conflict && w >= 1.5 && (attrs.size >= 4 || (attrs.size >= 3 && witnesses >= 2))) fits.push({ id: a.id, w });
+  }
+  if (fits.length !== 1) return null;
+  return { id: fits[0].id, score: 0.9 + 0.1 * Math.min(1, fits[0].w / 4) };
 }
 
 /** pick the next job for an on-duty officer */

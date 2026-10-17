@@ -3,7 +3,8 @@ import { makeSim, runHours, runUntilHour, freeSpot, hold } from './helpers';
 import { Simulation } from '../src/sim/simulation';
 import { generateWorld } from '../src/world/gen/generator';
 import { visibility, hearSound, witnessAct } from '../src/sim/perception';
-import { shareGossip, remember } from '../src/sim/memory';
+import { shareGossip, remember, trueDescription } from '../src/sim/memory';
+import { evaluateCase } from '../src/sim/police';
 import { startAttack, updateCombat } from '../src/sim/combat';
 import type { NpcState } from '../src/sim/types';
 
@@ -263,5 +264,39 @@ describe('save / load', () => {
       b.step(1 / 20);
     }
     expect(stateHash(b)).toEqual(stateHash(a));
+  });
+});
+
+describe('police reasoning', () => {
+  it('turns consistent witness descriptions into the right suspect, and conflicting ones into none', () => {
+    const sim = makeSim('detective');
+    const key = (n: NpcState) => JSON.stringify(trueDescription(sim, n));
+    const residents = sim.npcs.filter((n) => n.role !== 'police');
+    const unique = residents.find((n) => residents.filter((o) => key(o) === key(n)).length === 1 && key(n) !== JSON.stringify(trueDescription(sim, sim.player)))!;
+    expect(unique).toBeDefined();
+    const truth = trueDescription(sim, unique);
+    const [w1, w2] = residents.filter((n) => n !== unique);
+    const caseFor = (desc: object[]) => {
+      const c = {
+        id: sim.cases.length, incident: -1, kind: 'homicide', x: 0, z: 0, building: -1, opened: sim.time - 6 * 3600,
+        status: 'investigating' as const, assigned: -1, suspect: -1, suspectScore: 0, sceneChecked: true, bodyRemoved: false, interviewed: [], priority: 3,
+        reports: desc.map((d, i) => ({ from: i === 0 ? w1.id : w2.id, topic: 'murder' as const, actor: -1, desc: d, confidence: 0.9, time: sim.time - 6 * 3600 })),
+      };
+      sim.cases.push(c);
+      evaluateCase(sim, c);
+      return c;
+    };
+    const good = caseFor([
+      { height: truth.height, coat: truth.coat, hood: true },
+      { coat: truth.coat, build: truth.build, shoes: truth.shoes, hood: true },
+    ]);
+    expect(good.suspect).toBe(unique.id);
+    expect(good.status).toBe('suspect');
+    const other = residents.find((n) => trueDescription(sim, n).coat !== truth.coat)!;
+    const bad = caseFor([
+      { height: truth.height, coat: truth.coat, build: truth.build },
+      { coat: trueDescription(sim, other).coat, shoes: truth.shoes, build: truth.build },
+    ]);
+    expect(bad.suspect).toBe(-1);
   });
 });

@@ -68,8 +68,9 @@ All bindings can be changed in *Settings*. The full rules are in
   cleaning up, leaving traces, a lair) and a burglar; missing-person reports;
   persistent consequences (bodies, blood, broken glass, police tape, fear).
 * **Police**: calls and in-person reports open cases, officers travel,
-  examine scenes, search homes, interview witnesses, match descriptions and
-  arrest suspects into the station's cells – including you.
+  examine scenes, search homes, interview witnesses, combine named sightings
+  and descriptions into a suspect, arrest them (including you) and act on
+  accusations the chief accepts; suspects are held in the station's cells.
 * **Player**: first-person movement, sprint, crouch, dodge, health, stamina,
   bleeding, hunger and energy, inventory, money, shops (buy and sell),
   flashlight with battery, sleeping and waiting, hiding, lock-picking, boarding

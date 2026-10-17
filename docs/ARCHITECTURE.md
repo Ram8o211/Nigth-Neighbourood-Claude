@@ -118,10 +118,17 @@ household or colleagues. Everything persists: broken windows stay broken,
 bodies stay until found and collected, police tape stays up.
 
 **Police** – reports create or extend a `PoliceCase`. On-duty officers drive
-the case: travel to the scene, examine it, search the victim's building,
-interview witnesses (whose memories become reports), score suspects against
-the accumulated descriptions and arrest when the evidence passes a threshold.
-Arrested actors are held in cells at the station.
+the case: travel to the scene, examine it, search the victim's building and
+interview witnesses, whose memories become reports. Once an hour detectives
+go over the open files. Reports that *name* someone are weighted by what was
+seen (an attack counts far more than a glimpse of someone with a weapon, a
+hooded armed figure at night in between) and are combined with other open
+cases from the same two days. Unnamed descriptions (height, coat, hair, shoes,
+build) are checked against everybody in town; when they fit exactly one
+person – two witnesses agreeing on three traits, or one witness who saw four –
+that person becomes the suspect. An officer is then sent to make the arrest.
+The player's accusation, when the chief accepts it, opens a case with that
+suspect. Arrested actors are held in cells at the station.
 
 ## Game layer (`src/game`)
 

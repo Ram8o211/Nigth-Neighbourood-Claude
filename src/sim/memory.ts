@@ -95,6 +95,19 @@ export function describeActor(sim: Simulation, target: ActorState, clarity: numb
   return d;
 }
 
+/** everything a perfect witness could say about someone (no hood, close, in daylight) */
+export function trueDescription(sim: Simulation, target: ActorState): Description {
+  const app = sim.appearanceOf(target);
+  if (!app) return {};
+  return {
+    height: heightClass(app.height),
+    coat: sim.coatNameOf(target),
+    hair: app.hairStyle === 'bald' ? 'bald' : app.hairStyle === 'cap' ? 'a cap' : hairName(app.hair),
+    shoes: app.shoes,
+    build: app.build > 1.1 ? 'heavy-set' : app.build < 0.93 ? 'thin' : 'medium build',
+  };
+}
+
 /** can the observer put a name to the target? */
 export function identifies(sim: Simulation, observer: NpcState, target: ActorState, clarity: number, dist: number): boolean {
   if (target.kind === 'player') {
