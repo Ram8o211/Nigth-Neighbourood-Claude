@@ -300,3 +300,68 @@ describe('police reasoning', () => {
     expect(bad.suspect).toBe(-1);
   });
 });
+
+describe('police procedure', () => {
+  const mkCase = (sim: Simulation, kind: string, reports: { from: number; topic: 'attack' | 'trespass' | 'weapon' | 'murder'; actor: number; desc?: object }[]) => {
+    const c = {
+      id: sim.cases.length, incident: -1, kind, x: 0, z: 0, building: -1, opened: sim.time - 6 * 3600,
+      status: 'investigating' as const, assigned: -1, suspect: -1, suspectScore: 0, sceneChecked: true, bodyRemoved: false, interviewed: [], priority: 2,
+      reports: reports.map((r) => ({ ...r, desc: r.desc ?? {}, confidence: 1, time: sim.time - 6 * 3600 })),
+    };
+    sim.cases.push(c);
+    evaluateCase(sim, c);
+    return c;
+  };
+
+  it('never treats an officer using force as a suspect', () => {
+    const sim = makeSim('procedure');
+    const officer = sim.npcs.find((n) => n.role === 'police')!;
+    const [w1, w2] = sim.npcs.filter((n) => n.role === 'resident');
+    const c = mkCase(sim, 'assault', [
+      { from: w1.id, topic: 'attack', actor: officer.id },
+      { from: w2.id, topic: 'attack', actor: officer.id },
+    ]);
+    expect(c.suspect).toBe(-1);
+  });
+
+  it('makes a prowler a person of interest, and arrests for violence', () => {
+    const sim = makeSim('procedure-2');
+    const [w1, w2, prowler] = sim.npcs.filter((n) => n.role === 'resident');
+    const trespass = mkCase(sim, 'disturbance', [
+      { from: w1.id, topic: 'trespass', actor: prowler.id },
+      { from: w1.id, topic: 'weapon', actor: prowler.id, desc: { hood: true } },
+      { from: w2.id, topic: 'weapon', actor: prowler.id, desc: { hood: true } },
+      { from: w2.id, topic: 'trespass', actor: prowler.id },
+    ]);
+    expect(trespass.suspect).toBe(prowler.id);
+    expect(trespass.status).toBe('investigating');
+    const assault = mkCase(sim, 'assault', [{ from: w1.id, topic: 'attack', actor: prowler.id }]);
+    expect(assault.suspect).toBe(prowler.id);
+    expect(assault.status).toBe('suspect');
+  });
+
+  it('hands a prisoner to another officer when the escort is called away, and jails them', () => {
+    const sim = makeSim('procedure-3');
+    runUntilHour(sim, 11);
+    const officers = sim.npcs.filter((n) => n.role === 'police');
+    const [a] = officers;
+    const sus = sim.npcs.find((n) => n.role === 'resident' && n.building < 0) ?? sim.npcs.find((n) => n.role === 'resident')!;
+    hold(sim, sus);
+    hold(sim, a);
+    a.x = sus.x + 1;
+    a.z = sus.z;
+    a.activity = { kind: 'arrest', priority: 75, started: sim.time, until: Infinity, data: {} };
+    sim.arrest(a, sus);
+    expect(sus.arrested).toBe(true);
+    // the escort is pulled away
+    a.activity = { kind: 'work', priority: 35, started: sim.time, until: Infinity, data: {} };
+    a.tasks = [];
+    sim.step(0.05);
+    const by = Number(sus.activity?.data.by);
+    expect(by).not.toBe(a.id);
+    expect(sim.npc(by)?.role).toBe('police');
+    runHours(sim, 4, () => sus.inCustody);
+    expect(sus.inCustody).toBe(true);
+  });
+});
+

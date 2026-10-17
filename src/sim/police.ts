@@ -96,6 +96,8 @@ export function evaluateCase(sim: Simulation, c: PoliceCase) {
   for (const k of related) {
     for (const r of k.reports) {
       if (r.actor < 0) continue;
+      const named = sim.actors[r.actor];
+      if (named?.kind === 'npc' && (named as NpcState).role === 'police') continue; // officers on duty are not suspects
       const key = `${r.from}:${r.actor}:${r.topic}:${Math.round(r.time / 600)}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -122,11 +124,14 @@ export function evaluateCase(sim: Simulation, c: PoliceCase) {
     if (c.suspect !== best) sim.emit({ type: 'police', s: 'suspect', a: best, text: '' });
     c.suspect = best;
     c.suspectScore = bs;
-    if (c.status !== 'closed') c.status = 'suspect';
+    // violence and break-ins lead to an arrest; a prowler or trespasser only becomes a person of interest,
+    // whose sightings count again if a violent case follows
+    if (c.status !== 'closed' && ARRESTABLE.includes(c.kind)) c.status = 'suspect';
   }
 }
 
 const DESCRIBED: MemTopic[] = ['murder', 'attack', 'breakin', 'theft', 'prowler', 'weapon'];
+const ARRESTABLE = ['homicide', 'assault', 'break-in'];
 const DESC_KEYS = ['height', 'coat', 'hair', 'shoes', 'build'] as const;
 
 /**
@@ -279,7 +284,7 @@ export function policeTask(sim: Simulation, o: NpcState, task: Task, dt: number)
       if (w) task.data = { ...(task.data ?? {}), w: w.id };
       if (!w || c.interviewed.length >= 5) {
         // the case goes cold until new information arrives
-        c.status = c.suspect >= 0 ? 'suspect' : 'investigating';
+        c.status = c.suspect >= 0 && ARRESTABLE.includes(c.kind) ? 'suspect' : 'investigating';
         c.assigned = -1;
         return 'done';
       }
@@ -366,6 +371,12 @@ export function policeTask(sim: Simulation, o: NpcState, task: Task, dt: number)
 }
 
 function escortStep(sim: Simulation, o: NpcState, susId: number, dt: number, task: Task): TaskResult {
+  const sus = sim.actors[susId] as NpcState;
+  if (sus.activity?.data.wait) {
+    // taking over a prisoner from a colleague: go and get them first
+    stepGoto(sim, o, { ...task, arrive: 1.2 }, dt, sus.x, sus.z);
+    return 'running';
+  }
   const pol = sim.world.buildings[sim.world.policeId];
   const cell = sim.world.rooms.find((r) => r.buildingId === pol.id && r.kind === 'cell' && !sim.actors.some((a) => a.inCustody && a.room === r.id));
   const dest = cell ? sim.doorFrontOfRoom(cell.id) : pol.insideFront;
@@ -390,7 +401,7 @@ export function caseSummary(sim: Simulation): string[] {
     if (c.status === 'closed' && sim.time - c.opened > 86400 * 2) continue;
     const reps = c.reports.filter((r) => r.desc.height || r.desc.coat || r.actor >= 0);
     let line = `${c.kind[0].toUpperCase() + c.kind.slice(1)} reported ${sim.placeName(c.x, c.z)}`;
-    if (c.suspect >= 0) line += `. Suspect: ${sim.actorName(c.suspect)}.`;
+    if (c.suspect >= 0) line += c.status === 'suspect' || c.status === 'closed' ? `. Suspect: ${sim.actorName(c.suspect)}.` : `. Person of interest: ${sim.actorName(c.suspect)}.`;
     else if (reps.length) {
       const r = reps[reps.length - 1];
       line += `. A witness described ${sim.descText(r.desc)}.`;

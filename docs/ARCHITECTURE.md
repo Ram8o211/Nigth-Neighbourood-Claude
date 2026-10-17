@@ -126,9 +126,14 @@ hooded armed figure at night in between) and are combined with other open
 cases from the same two days. Unnamed descriptions (height, coat, hair, shoes,
 build) are checked against everybody in town; when they fit exactly one
 person – two witnesses agreeing on three traits, or one witness who saw four –
-that person becomes the suspect. An officer is then sent to make the arrest.
-The player's accusation, when the chief accepts it, opens a case with that
-suspect. Arrested actors are held in cells at the station.
+that person becomes the suspect. For violent crimes and break-ins an officer
+is then sent to make the arrest; for a prowler, trespasser or disturbance the
+person only becomes a *person of interest*, which the chief mentions to the
+player and which counts again if a violent case follows. Force used by
+officers is never reported as a crime. If an escorting officer is called away,
+another officer takes the prisoner over. The player's accusation, when the
+chief accepts it, opens a case with that suspect. Arrested actors are held in
+cells at the station.
 
 ## Game layer (`src/game`)
 

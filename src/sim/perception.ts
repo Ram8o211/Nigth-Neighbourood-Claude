@@ -174,6 +174,8 @@ export function hearSound(sim: Simulation, kind: string, x: number, z: number, l
 export function witnessAct(sim: Simulation, actorId: number, topic: MemTopic, x: number, z: number, subject: number, incident: number, alarm: number, defensive = false) {
   const actor = sim.actors[actorId];
   if (!actor) return;
+  // an officer using force (making an arrest, stopping a fight) is not the threat
+  if (actor.kind === 'npc' && (actor as NpcState).role === 'police') defensive = true;
   for (const npc of sim.npcs) {
     if (npc.id === actorId || npc.id === subject) continue;
     if (!npc.alive || npc.sleeping) continue;

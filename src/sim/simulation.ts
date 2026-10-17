@@ -1144,9 +1144,26 @@ export class Simulation {
     for (const n of this.npcs) {
       if (!n.arrested || n.inCustody || !n.alive) continue;
       const by = this.npc(Number(n.activity?.data.by ?? -1));
-      if (!by || !by.alive) {
-        n.arrested = false;
-        n.activity = null;
+      const escorting = !!by && by.alive && !by.inCustody && !by.arrested && by.stance !== 'downed' && by.activity?.kind === 'arrest';
+      if (!escorting) {
+        // the escort was called away or hurt: another officer takes over, otherwise the prisoner slips away
+        const other = this.npcs.find((o) => o.role === 'police' && o !== by && o.alive && !o.inCustody && !o.arrested && o.stance !== 'downed' && o.activity?.kind !== 'arrest');
+        if (other && n.activity) {
+          n.activity.data.by = other.id;
+          n.activity.data.wait = 1;
+          setActivity(this, other, 'arrest', 75, [{ kind: 'p_arrest', target: n.id }]);
+        } else {
+          n.arrested = false;
+          n.activity = null;
+          for (const c of this.cases) if (c.suspect === n.id && c.status !== 'closed') c.status = 'suspect';
+        }
+        continue;
+      }
+      if (n.activity?.data.wait) {
+        // standing in handcuffs until the new escort arrives
+        n.speed = 0;
+        n.anim = 'idle';
+        if (Math.hypot(by.x - n.x, by.z - n.z) < 1.6) delete n.activity.data.wait;
         continue;
       }
       const tx = by.x - Math.sin(by.yaw) * 1.1;

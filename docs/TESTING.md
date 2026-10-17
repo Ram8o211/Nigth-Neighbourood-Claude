@@ -18,12 +18,12 @@ gzipped) plus CSS – there are no asset files because everything is generated.
 
 ## Unit and simulation tests (`npm test`)
 
-28 tests in 4 files, all passing (last full run: 23 s wall time).
+31 tests in 4 files, all passing (last full run: about 30 s wall time).
 
 | File | What it checks |
 | --- | --- |
 | `tests/worldgen.test.ts` (9) | Same seed → identical town, different seed → different town; required buildings for all three sizes; doors and windows sit in wall openings on the correct sides; every building entrance, room, door side and furniture use point is reachable from the player's house; every home has a telephone and the player's house a table; connected roads/sidewalks; street lights, porch lights and dark alleys (8 seeds). |
-| `tests/sim.test.ts` (10) | Population is reproducible and well formed (one killer, police, a chief, a lair); the simulation is deterministic (two runs of 1 500 steps are bit-identical); residents are at work by day and >80 % asleep at 3 am, couples side by side in their double bed; visibility drops in darkness, rises with a flashlight, is zero behind the observer and through walls; *saw / heard / told* memories are kept apart and hearsay loses confidence; repeated observations merge; melee hits in range, respects cooldowns, never hits through a wall, kills, opens an incident and spills blood; a killing witnessed by a neighbour who knows you raises your wanted level and opens a police case; police turn consistent witness descriptions into the right suspect and conflicting ones into none; **save → JSON → load into a freshly generated world → 1 200 more steps** is identical to never having saved. |
+| `tests/sim.test.ts` (13) | Population is reproducible and well formed (one killer, police, a chief, a lair); the simulation is deterministic (two runs of 1 500 steps are bit-identical); residents are at work by day and >80 % asleep at 3 am, couples side by side in their double bed; visibility drops in darkness, rises with a flashlight, is zero behind the observer and through walls; *saw / heard / told* memories are kept apart and hearsay loses confidence; repeated observations merge; melee hits in range, respects cooldowns, never hits through a wall, kills, opens an incident and spills blood; a killing witnessed by a neighbour who knows you raises your wanted level and opens a police case; police turn consistent witness descriptions into the right suspect and conflicting ones into none, never suspect an officer for using force, make a prowler a person of interest but arrest for violence, and hand a prisoner to another officer when the escort is called away; **save → JSON → load into a freshly generated world → 1 200 more steps** is identical to never having saved. |
 | `tests/story.test.ts` (8) | Game start (bus stop, key, letter); weak or contradicting accusations are rejected; a well-supported accusation gets the killer arrested by the simulated police and produces the winning ending; death and running out of nights produce the losing endings; journal and story state survive serialisation; save validation rejects outdated format, other generator, older simulation, incomplete and corrupt data; empty and corrupt slots are reported without throwing. |
 | `tests/emergent.test.ts` (1) | Three towns run headless for three full days and nights with nobody scripting anything. Requires murders, discovered bodies, police cases and reports, no resident stuck on path failures, finite positions. |
 
@@ -35,9 +35,15 @@ Output of the last emergent run (3 days, medium town, default director):
 | emerge-2 | 1 | 1 | 1 | 4 | 38 | 0 | 0.066 |
 | emerge-3 | 2 | 0 | 2 | 4 | 28 | 0 | 0.053 |
 
-Over five nights (`scripts/soak.ts`, six seeds) the police arrested the killer
-on their own in two seeds, on day 3, both times the right person; in the other
-four the case files did not name or describe anyone uniquely.
+`scripts/story-soak.ts` runs the real game director for five nights with a
+passive player who stays locked in at home. Over nine seeds the killer
+claimed 0–4 victims per game (19 in total), the police named persons of
+interest from sightings but arrested nobody, and every game ended with
+*The Night Neighbour got away* – a player who does not investigate loses,
+which is the intended design. (Before the fixes below, two seeds ended on the
+first afternoon with an arrest for a mere trespass, and in another an officer
+was arrested for using force while her prisoner was left handcuffed in the
+street forever.)
 
 ## Browser smoke test (`npm run test:e2e`)
 
@@ -149,7 +155,15 @@ the game on real hardware (the FPS counter is in *Settings → Graphics*).
 * Residents without a job had no income and re-planned a shopping trip every
   hour; the burglar abandoned every attempt when anybody within 25 m glimpsed
   them.
-* Police cases never progressed without a named culprit (see above).
+* Police cases never progressed without a named culprit; detectives now
+  re-read their files hourly and use descriptions.
+* Witnesses reported officers making an arrest as assailants, and colleagues
+  arrested them; a prisoner whose escort was taken away stayed handcuffed in
+  the street for the rest of the game, so the arrest never counted. Found with
+  `scripts/story-soak.ts`.
+* A trespass or prowler sighting could get the killer arrested on the first
+  morning, ending the game before the player had done anything; such cases
+  now produce a person of interest and arrests follow violent crimes.
 * Setting the player's health to zero did not end the game (regeneration ran
   first) and starvation skipped the normal death handling.
 * Blood decals (and feet) were drawn under paths, driveways and roads, which

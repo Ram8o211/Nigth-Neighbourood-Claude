@@ -63,6 +63,9 @@ Each morning the game autosaves.
   actual memories and say how they know: *"I saw…"* (witnessed), *"I heard…"*
   (heard only), *"X told me…"* (hearsay, less reliable). Ask where they were
   last night for alibis, who wears a particular coat, who smokes.
+* **The police chief** – *Any progress on the case?* gives you the case
+  files: what was reported where, witness descriptions, suspects and persons
+  of interest (somebody seen prowling or trespassing).
 * **Your own sightings** – watching residents teaches you their height, coat,
   shoes, hair and whether they smoke. Seeing a hooded figure at night, or
   somebody leaving home at 3 am, is recorded.
