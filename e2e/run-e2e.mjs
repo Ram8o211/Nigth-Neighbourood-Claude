@@ -27,7 +27,7 @@ async function waitForServer(url, ms) {
 if (!base) {
   // test the production bundle: build, then serve it with `vite preview`
   if (!process.env.NN_SKIP_BUILD) {
-    const b = spawnSync('npx', ['vite', 'build'], { stdio: 'inherit' });
+    const b = spawnSync('npm', ['run', 'build'], { stdio: 'inherit' });
     if (b.status !== 0) {
       console.error('build failed');
       process.exit(2);

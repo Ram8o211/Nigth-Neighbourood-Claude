@@ -13,18 +13,19 @@ are copied from their output. Where something was **not** measured it says so.
 ## Static checks
 
 `npm run typecheck` (`tsc --noEmit`, strict mode, `src/` and `tests/`): no errors.
-`npm run build`: succeeds; the bundle is one 948 kB JavaScript file (276 kB
+`npm run build`: succeeds; the bundle is one 955 kB JavaScript file (278 kB
 gzipped) plus CSS – there are no asset files because everything is generated.
 
 ## Unit and simulation tests (`npm test`)
 
-31 tests in 4 files, all passing (last full run: about 30 s wall time).
+33 tests in 5 files, all passing (last full run: 22 s wall time).
 
 | File | What it checks |
 | --- | --- |
 | `tests/worldgen.test.ts` (9) | Same seed → identical town, different seed → different town; required buildings for all three sizes; doors and windows sit in wall openings on the correct sides; every building entrance, room, door side and furniture use point is reachable from the player's house; every home has a telephone and the player's house a table; connected roads/sidewalks; street lights, porch lights and dark alleys (8 seeds). |
 | `tests/sim.test.ts` (13) | Population is reproducible and well formed (one killer, police, a chief, a lair); the simulation is deterministic (two runs of 1 500 steps are bit-identical); residents are at work by day and >80 % asleep at 3 am, couples side by side in their double bed; visibility drops in darkness, rises with a flashlight, is zero behind the observer and through walls; *saw / heard / told* memories are kept apart and hearsay loses confidence; repeated observations merge; melee hits in range, respects cooldowns, never hits through a wall, kills, opens an incident and spills blood; a killing witnessed by a neighbour who knows you raises your wanted level and opens a police case; police turn consistent witness descriptions into the right suspect and conflicting ones into none, never suspect an officer for using force, make a prowler a person of interest but arrest for violence, and hand a prisoner to another officer when the escort is called away; **save → JSON → load into a freshly generated world → 1 200 more steps** is identical to never having saved. |
 | `tests/story.test.ts` (8) | Game start (bus stop, key, letter); weak or contradicting accusations are rejected; a well-supported accusation gets the killer arrested by the simulated police and produces the winning ending; death and running out of nights produce the losing endings; journal and story state survive serialisation; save validation rejects outdated format, other generator, older simulation, incomplete and corrupt data; empty and corrupt slots are reported without throwing. |
+| `tests/audio.test.ts` (2) | Every sample name the audio engine plays exists in the synthesized bank (57 sounds, 88 s of audio, built in about 0.45 s); every buffer is finite, audible and does not clip. |
 | `tests/emergent.test.ts` (1) | Three towns run headless for three full days and nights with nobody scripting anything. Requires murders, discovered bodies, police cases and reports, no resident stuck on path failures, finite positions. |
 
 Output of the last emergent run (3 days, medium town, default director):
@@ -57,7 +58,8 @@ target. Checks:
 
 * every main-menu button opens its screen and *Back* returns; a settings
   slider changes a setting and it is saved
-* *New Game → Begin* generates a town; HUD and objectives appear
+* *New Game → Begin* generates a town; HUD and objectives appear; the audio
+  engine is running with the synthesized sound bank and the day music
 * W moves the player, arrow keys turn the camera
 * the uncle's front door starts locked, is targeted, and **E** unlocks and
   opens it with the key; the player can walk in
@@ -88,7 +90,7 @@ target. Checks:
   now offers *Continue*
 * no uncaught page errors and no errors in the game loop
 
-Last run: **72 of 72 checks passed** in 567 s (most of the time is the
+Last run: **73 of 73 checks passed** in 559 s (most of the time is the
 software renderer drawing frames). The run log is printed to the console and
 saved as `e2e/out/e2e-results.json`.
 

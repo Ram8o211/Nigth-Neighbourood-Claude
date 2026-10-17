@@ -77,6 +77,11 @@ export default async function smoke(page, h) {
   await h.frames(4);
   let s = await state();
   check('HUD visible', await page.locator('#hud').isVisible());
+  const audio = await h.eval(() => {
+    const a = window.__game.audio;
+    return { ready: a.ready, ctx: a.ctx?.state, buffers: a.buffers.size, music: a.music?.state };
+  });
+  check('audio engine running with the synthesized sound bank and day music', audio.ready && audio.ctx === 'running' && audio.buffers > 50 && audio.music === 'day', JSON.stringify(audio));
   check('objectives shown', (await page.locator('.objectives').innerText()).includes('uncle'));
   await h.shot('03_arrival');
 
