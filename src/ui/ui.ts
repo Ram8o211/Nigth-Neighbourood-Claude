@@ -56,6 +56,8 @@ export class UI {
   private obsEl: HTMLElement | null = null;
   private obsT = 0;
   private dialogKind = '';
+  /** result of the last save, shown on the next saves screen */
+  private saveNotice = '';
 
   constructor(private game: Game) {
     this.root = document.getElementById('ui')!;
@@ -215,8 +217,7 @@ export class UI {
           saving
             ? btn('Save here', () => {
                 const err = this.game.saveTo(slot);
-                if (err) this.message(err, 'warn');
-                else this.message('Game saved.', 'good');
+                this.saveNotice = err ? `Could not save: ${err}` : 'Game saved.';
                 this.showSaves(true, back);
               }, 'small')
             : btn('Load', () => this.load(slot), 'small', !meta || !meta.valid),
@@ -228,7 +229,18 @@ export class UI {
         ),
       );
     });
-    this.screen(h('div', { class: 'panel', style: 'min-width:620px' }, h('h2', {}, saving ? 'Save Game' : 'Load Game'), h('table', { class: 'list' }, ...rows), h('div', { class: 'buttons' }, btn('Back', back2))));
+    const notice = this.saveNotice;
+    this.saveNotice = '';
+    this.screen(
+      h(
+        'div',
+        { class: 'panel', style: 'min-width:620px' },
+        h('h2', {}, saving ? 'Save Game' : 'Load Game'),
+        notice ? h('p', { class: notice.startsWith('Could not') ? 'warn' : 'muted' }, notice) : null,
+        h('table', { class: 'list' }, ...rows),
+        h('div', { class: 'buttons' }, btn('Back', back2)),
+      ),
+    );
   }
 
   showPause() {
@@ -692,9 +704,25 @@ export class UI {
       c.fillStyle = b.id === w.playerHouseId ? '#c8a45a' : b.kind === 'house' ? '#8a8270' : b.kind === 'shed' ? '#5a5448' : b.kind === 'abandoned' ? '#4a4038' : '#9a8a6a';
       c.fillRect(b.rect.x0 * sc, b.rect.z0 * sc, (b.rect.x1 - b.rect.x0) * sc, (b.rect.z1 - b.rect.z0) * sc);
     }
+    // public buildings get a numbered marker and a legend entry (names would overlap on Main Street)
+    const publicB = w.buildings.filter((b) => b.kind !== 'house' && b.kind !== 'shed' && b.kind !== 'abandoned').sort((a, b) => a.rect.z0 - b.rect.z0 || a.rect.x0 - b.rect.x0);
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = 'bold 10px Georgia';
+    publicB.forEach((b, i) => {
+      const x = ((b.rect.x0 + b.rect.x1) / 2) * sc;
+      const z = ((b.rect.z0 + b.rect.z1) / 2) * sc;
+      c.fillStyle = '#1e1c14';
+      c.beginPath();
+      c.arc(x, z, 8, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#e8dcc0';
+      c.fillText(String(i + 1), x, z + 0.5);
+    });
+    c.textAlign = 'left';
+    c.textBaseline = 'alphabetic';
     c.font = '11px Georgia';
     c.fillStyle = '#e8dcc0';
-    for (const b of w.buildings) if (b.kind !== 'house' && b.kind !== 'shed' && b.kind !== 'abandoned') c.fillText(b.name, b.rect.x0 * sc, b.rect.z0 * sc - 3);
     for (const l of w.landmarks) if (l.kind === 'pond' || l.kind === 'graveyard' || l.kind === 'watertower') c.fillText(l.name, l.x * sc, l.z * sc);
     // street names
     c.fillStyle = '#b8ac90';
@@ -746,7 +774,13 @@ export class UI {
     c.closePath();
     c.fill();
     c.restore();
-    return h('div', {}, cv, h('div', { class: 'muted', style: 'margin-top:6px' }, 'Gold: your house. Red crosses: crime scenes. Dots: objectives.'));
+    const legend = h('ol', { class: 'map-legend' }, ...publicB.map((b) => h('li', {}, b.name)));
+    return h(
+      'div',
+      {},
+      h('div', { class: 'map-wrap' }, cv, legend),
+      h('div', { class: 'muted', style: 'margin-top:6px' }, 'Gold: your house. Red crosses: crime scenes. Dots: objectives. White arrow: you.'),
+    );
   }
 
   showEnding(e: Ending) {
@@ -763,7 +797,7 @@ export class UI {
         { class: 'panel', style: 'max-width:640px' },
         h('p', {}, e.text),
         h('h3', {}, 'The truth'),
-        h('p', { class: 'muted' }, `The Night Neighbour was ${fullName(k)}, who ${JOB_TITLE[k.job]} at ${sim.world.buildings[k.homeId].address}: ${heightClass(k.app.height)}, ${k.app.coatName} coat, ${hairName(k.app.hair)} hair, ${k.app.shoes === 'dress' ? 'dress shoes' : k.app.shoes}${k.smoker ? ', a smoker' : ''}.`),
+        h('p', { class: 'muted' }, `The Night Neighbour was ${fullName(k)}, who ${JOB_TITLE[k.job]} and lives at ${sim.world.buildings[k.homeId].address}: ${heightClass(k.app.height)}, ${k.app.coatName} coat, ${hairName(k.app.hair)} hair, ${k.app.shoes === 'dress' ? 'dress shoes' : k.app.shoes}${k.smoker ? ', a smoker' : ''}.`),
         h('p', { class: 'muted' }, `Nights survived: ${st.nightsSurvived}. Evidence found: ${g.journal!.clues.length}. Conversations: ${st.talks}. Victims: ${sim.incidents.filter((i) => i.kind === 'murder' && i.perp === k.id).length}.`),
         h(
           'div',

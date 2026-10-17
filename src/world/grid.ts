@@ -1,5 +1,6 @@
 import type { Surface, WorldData } from './types';
 import { wallPieces, wallRect } from './collision';
+import { GROUND_Y } from './ground';
 
 export const CELL = 0.5;
 export const NAV_R = 0.25;
@@ -93,7 +94,7 @@ export class WorldGrid {
     this.bld.fill(0);
     for (const g of world.ground) {
       const s = SURFACES.indexOf(g.surface);
-      const h = g.kind === 'sidewalk' ? 10 : g.kind === 'porch' || g.kind === 'porch_old' ? 12 : 0;
+      const h = g.kind === 'sidewalk' ? 10 : g.kind === 'porch' || g.kind === 'porch_old' ? 12 : Math.max(0, Math.round((GROUND_Y[g.kind] ?? 0) * 100));
       const road = g.surface === 'asphalt' || g.kind === 'sidewalk';
       this.fillCentres(g.rect.x0, g.rect.z0, g.rect.x1, g.rect.z1, 0, (i) => {
         this.surface[i] = s;

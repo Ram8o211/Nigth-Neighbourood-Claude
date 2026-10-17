@@ -612,11 +612,30 @@ table.list th {
   color: var(--muted);
   font-size: 12px;
 }
+.map-wrap {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
 .map-canvas {
-  width: 100%;
-  max-width: 640px;
+  flex: 0 1 auto;
+  width: min(100%, 560px, calc(88vh - 190px));
+  aspect-ratio: 1;
   border: 1px solid var(--line);
   background: #1a1812;
+}
+.map-legend {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  min-width: 170px;
+}
+@media (max-width: 760px) {
+  .map-wrap {
+    flex-direction: column;
+  }
 }
 
 /* observer */
@@ -648,6 +667,8 @@ table.list th {
   position: absolute;
   left: 12px;
   top: 12px;
+  max-width: calc(100% - 400px);
+  flex-wrap: wrap;
   display: flex;
   gap: 6px;
   align-items: center;
@@ -689,4 +710,8 @@ table.list th {
   .grid2 {
     grid-template-columns: 1fr;
   }
+}
+
+.panel p.warn {
+  color: #e08a6a;
 }

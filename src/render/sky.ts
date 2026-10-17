@@ -21,16 +21,16 @@ export interface Atmosphere {
 const C = (h: number) => new THREE.Color(h);
 
 const KEYS: { h: number; top: number; hor: number; sun: number; sunI: number; hs: number; hg: number; hi: number; fog: number; fogD: number; exp: number }[] = [
-  { h: 0, top: 0x03050b, hor: 0x0a0f1c, sun: 0x8fa4d8, sunI: 0.55, hs: 0x2c3a58, hg: 0x16161c, hi: 0.64, fog: 0x080b14, fogD: 0.028, exp: 1.4 },
-  { h: 4.5, top: 0x03050b, hor: 0x0c1220, sun: 0x8fa4d8, sunI: 0.52, hs: 0x2c3a58, hg: 0x16161c, hi: 0.62, fog: 0x080b14, fogD: 0.028, exp: 1.4 },
+  { h: 0, top: 0x03050b, hor: 0x0a0f1c, sun: 0x8fa4d8, sunI: 0.55, hs: 0x3c4c72, hg: 0x1e1e26, hi: 0.8, fog: 0x080b14, fogD: 0.028, exp: 1.4 },
+  { h: 4.5, top: 0x03050b, hor: 0x0c1220, sun: 0x8fa4d8, sunI: 0.52, hs: 0x3c4c72, hg: 0x1e1e26, hi: 0.78, fog: 0x080b14, fogD: 0.028, exp: 1.4 },
   { h: 5.8, top: 0x1a2240, hor: 0x8a5a5a, sun: 0xffa078, sunI: 0.5, hs: 0x5a5a78, hg: 0x2a2420, hi: 0.5, fog: 0x4a4250, fogD: 0.018, exp: 1.1 },
   { h: 7.0, top: 0x4a6a9a, hor: 0xd8b8a0, sun: 0xffd8b0, sunI: 2.2, hs: 0xa8b4c8, hg: 0x5a4e40, hi: 1.6, fog: 0xa8a8b0, fogD: 0.008, exp: 1.25 },
   { h: 12, top: 0x4a74a8, hor: 0xb8c4cc, sun: 0xfff2e0, sunI: 3.2, hs: 0xb8c4d4, hg: 0x6a5e4e, hi: 1.9, fog: 0xb0b8c0, fogD: 0.0055, exp: 1.3 },
   { h: 16.5, top: 0x4a6a98, hor: 0xc8c0b4, sun: 0xffe2c0, sunI: 2.9, hs: 0xb0b8c8, hg: 0x665848, hi: 1.75, fog: 0xa8a8ac, fogD: 0.0065, exp: 1.3 },
   { h: 18.6, top: 0x3a4a78, hor: 0xe08858, sun: 0xff9a5a, sunI: 1.9, hs: 0x9a8a9a, hg: 0x4e4038, hi: 1.15, fog: 0x8a6a68, fogD: 0.01, exp: 1.25 },
   { h: 19.7, top: 0x1a2048, hor: 0x8a4a52, sun: 0xd87a6a, sunI: 0.45, hs: 0x4a4a6a, hg: 0x1e1a1c, hi: 0.5, fog: 0x3a3048, fogD: 0.016, exp: 1.15 },
-  { h: 20.8, top: 0x070a18, hor: 0x1a1a30, sun: 0x8fa4d8, sunI: 0.52, hs: 0x2c3a58, hg: 0x16161c, hi: 0.64, fog: 0x0c0e18, fogD: 0.026, exp: 1.4 },
-  { h: 24, top: 0x03050b, hor: 0x0a0f1c, sun: 0x8fa4d8, sunI: 0.55, hs: 0x2c3a58, hg: 0x16161c, hi: 0.64, fog: 0x080b14, fogD: 0.028, exp: 1.4 },
+  { h: 20.8, top: 0x070a18, hor: 0x1a1a30, sun: 0x8fa4d8, sunI: 0.52, hs: 0x3c4c72, hg: 0x1e1e26, hi: 0.8, fog: 0x0c0e18, fogD: 0.026, exp: 1.4 },
+  { h: 24, top: 0x03050b, hor: 0x0a0f1c, sun: 0x8fa4d8, sunI: 0.55, hs: 0x3c4c72, hg: 0x1e1e26, hi: 0.8, fog: 0x080b14, fogD: 0.028, exp: 1.4 },
 ];
 
 const tmpA = new THREE.Color();

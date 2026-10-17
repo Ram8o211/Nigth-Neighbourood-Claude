@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GROUND_Y } from '../world/ground';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Rng } from '../core/rng';
 import type { Building, Furniture, Prop, WorldData } from '../world/types';
@@ -8,23 +9,6 @@ import { ChunkedBuilder, MeshBuilder, FACES } from './meshBuilder';
 import { floorMat, groundMat, material } from './materials';
 import { signTexture, tex } from './textures';
 
-const GROUND_Y: Record<string, number> = {
-  forestfloor: -0.03,
-  town: 0,
-  overgrown: 0.006,
-  vacant: 0.006,
-  wild: 0.006,
-  park: 0.004,
-  parkpath: 0.012,
-  path: 0.012,
-  alley: 0.014,
-  main: 0.018,
-  street: 0.018,
-  parking: 0.022,
-  forecourt: 0.02,
-  driveway: 0.026,
-  walkway: 0.03,
-};
 
 export interface WorldMeshes {
   group: THREE.Group;

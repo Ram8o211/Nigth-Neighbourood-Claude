@@ -1,11 +1,14 @@
-// Documentation screenshots: node e2e/drive.mjs e2e/screens.mjs docs/screenshots
+// Documentation screenshots: NN_SHOT_EXT=jpg node e2e/drive.mjs e2e/screens.mjs docs/screenshots
 // Starts a game, then stages a few situations with window.__nnTest and captures them.
 export default async function screens(page, h) {
   const setHour = (hr) =>
     h.eval((hr) => {
       const s = window.__game.sim;
-      const day = Math.floor(s.time / 86400);
-      s.time = day * 86400 + hr * 3600;
+      // time only moves forward (decals and memories are time-stamped)
+      let t = Math.floor(s.time / 86400) * 86400 + hr * 3600;
+      if (t < s.time) t += 86400;
+      s.time = t;
+      s.lightTimer = 0; // street and porch lights switch on the next step
     }, hr);
   const stand = (x, z, tx, ty, tz) => h.eval(([x, z, tx, ty, tz]) => window.__nnTest.stand(x, z, tx, ty, tz), [x, z, tx, ty, tz]);
   const settle = () => h.frames(4);
@@ -59,44 +62,68 @@ export default async function screens(page, h) {
     }
   }
 
-  // residents
-  const npc = await h.eval(() => {
+  // a resident on the pavement in front of the house, stopped for a chat
+  const npc = await h.eval(([x, z]) => {
     const s = window.__game.sim;
-    const p = s.player;
-    const n = s.npcs.filter((n) => n.alive && n.building < 0 && !n.sleeping && n.role !== 'police').sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
-    return n ? { id: n.id, x: n.x, z: n.z, y: n.y } : null;
-  });
+    const n = s.npcs.find((n) => n.alive && n.role === 'resident' && n.homeId !== s.world.playerHouseId);
+    const spot = window.__nnTest.spotNear(x, z, 3, 6);
+    n.tasks = [];
+    n.activity = null;
+    n.path = null;
+    n.sleeping = false;
+    n.stance = 'stand';
+    n.usingFurniture = -1;
+    n.x = spot.x;
+    n.z = spot.z;
+    n.y = s.grid.heightAt(n.x, n.z);
+    n.room = -1;
+    n.building = -1;
+    n.thinkT = 30;
+    n.yaw = Math.atan2(x - n.x, -(z - n.z));
+    return { id: n.id, x: n.x, z: n.z, y: n.y };
+  }, [home.of.x, home.of.z]);
   if (npc) {
-    const spot = await h.eval(([x, z]) => window.__nnTest.spotNear(x, z, 2.2, 3.5), [npc.x, npc.z]);
-    if (spot) {
-      await stand(spot.x, spot.z, npc.x, npc.y + 1.3, npc.z);
-      await settle();
-      await h.shot('resident');
-    }
+    const dx = npc.x - home.of.x;
+    const dz = npc.z - home.of.z;
+    const d = Math.hypot(dx, dz) || 1;
+    await stand(npc.x - (dx / d) * 1.8, npc.z - (dz / d) * 1.8, npc.x, npc.y + 1.45, npc.z);
+    await h.frames(2);
+    await h.shot('resident');
   }
 
-  // a crime scene at dusk: the killer's victim in a front yard, a smashed window
+  // a crime scene found in the morning: the killer's victim on a front lawn, a smashed window behind
+  await setHour(10.75);
   const scene = await h.eval(() => {
     const s = window.__game.sim;
     const victim = s.npcs.find((n) => n.alive && n.role === 'resident' && n.homeId !== s.world.playerHouseId && s.world.buildings[n.homeId].kind === 'house');
     const b = s.world.buildings[victim.homeId];
-    const win = s.world.windows.find((w) => w.buildingId === b.id && w.exterior !== false);
+    const out = { x: b.outsideFront.x - b.insideFront.x, z: b.outsideFront.z - b.insideFront.z };
+    const l = Math.hypot(out.x, out.z) || 1;
+    out.x /= l;
+    out.z /= l;
+    const spot = window.__nnTest.spotNear(b.outsideFront.x + out.x * 2.2, b.outsideFront.z + out.z * 2.2, 0, 1.5);
     victim.tasks = [];
     victim.activity = null;
     victim.path = null;
-    victim.x = b.outsideFront.x;
-    victim.z = b.outsideFront.z;
+    victim.x = spot.x;
+    victim.z = spot.z;
     victim.y = s.grid.heightAt(victim.x, victim.z);
     victim.room = -1;
     victim.building = -1;
+    victim.yaw = Math.atan2(out.x, -out.z);
     window.__nnTest.kill(victim.id, s.killerId);
+    // the front window nearest the door is smashed
+    const fx = b.outsideFront.x;
+    const fz = b.outsideFront.z;
+    const win = s.world.windows.filter((w) => w.buildingId === b.id).sort((a, c) => Math.hypot((a.axis === 'x' ? a.t : a.c) - fx, (a.axis === 'x' ? a.c : a.t) - fz) - Math.hypot((c.axis === 'x' ? c.t : c.c) - fx, (c.axis === 'x' ? c.c : c.t) - fz))[0];
     if (win) window.__nnTest.hitWindow(win.id, 99);
-    return { x: victim.x, z: victim.z, y: victim.y, win: win ? { x: win.axis === 'x' ? win.t : win.c, z: win.axis === 'x' ? win.c : win.t } : null };
+    return { x: victim.x, z: victim.z, y: victim.y, out, house: { x: (b.rect.x0 + b.rect.x1) / 2, z: (b.rect.z0 + b.rect.z1) / 2 } };
   });
-  await setHour(19.3);
-  const sceneSpot = await h.eval(([x, z]) => window.__nnTest.spotNear(x, z, 2.6, 4.5), [scene.x, scene.z]);
-  if (sceneSpot) {
-    await stand(sceneSpot.x, sceneSpot.z, scene.x, scene.y + 0.2, scene.z);
+  await setHour(11);
+  const cam = await h.eval(([x, z]) => window.__nnTest.spotNear(x, z, 0, 1.5), [scene.x + scene.out.x * 3.2, scene.z + scene.out.z * 3.2]);
+  if (cam) {
+    await stand(cam.x, cam.z, scene.house.x, 1.0, scene.house.z);
+    await h.eval(() => (window.__game.sim.player.pitch = -0.32));
     await settle();
     await h.shot('crime_scene');
   }
@@ -145,4 +172,18 @@ export default async function screens(page, h) {
   });
   await h.frames(30);
   await h.shot('observer');
+
+  // the good ending: the chief accepted an accusation and the killer is in a cell
+  await h.eval(() => window.__game.exitObserver());
+  await h.frames(2);
+  await h.eval(() => {
+    const g = window.__game;
+    const k = g.sim.npc(g.sim.killerId);
+    g.story.accusations.push({ id: k.id, time: g.sim.time, accepted: true });
+    const cell = g.sim.world.rooms.find((r) => r.buildingId === g.sim.world.policeId && r.kind === 'cell');
+    g.sim.jail(k, cell ? cell.id : -1);
+  });
+  await h.waitFor(() => window.__game.mode === 'ending', null, 60000);
+  await h.frames(2);
+  await h.shot('ending_win');
 }

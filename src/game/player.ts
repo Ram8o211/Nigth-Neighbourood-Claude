@@ -4,7 +4,7 @@ import type { NpcState, PlayerState } from '../sim/types';
 import type { Furniture, ItemStack } from '../world/types';
 import { ITEMS, itemName } from '../sim/items';
 import { moveActor, updateLocation } from '../sim/movement';
-import { startAttack } from '../sim/combat';
+import { startAttack, kill } from '../sim/combat';
 import { hearSound } from '../sim/perception';
 import type { Input } from './input';
 import { CFG } from '../sim/config';
@@ -210,10 +210,12 @@ export class PlayerController {
       p.healPool -= h;
       p.health = Math.min(p.maxHealth, p.health + h);
     }
-    if (p.hunger < 75 && p.bleeding <= 0 && p.health < p.maxHealth) p.health = Math.min(p.maxHealth, p.health + hrs * 5);
-    if (p.health <= 0 && p.alive) {
-      sim.emit({ type: 'player_dead' });
+    if (p.health <= 0) {
+      // starvation or wounds: the same death as anybody else (body, sound, ending)
+      kill(sim, p, p.lastAttacker, p.hunger >= 100 ? 'starvation' : 'wounds');
+      return;
     }
+    if (p.hunger < 75 && p.bleeding <= 0 && p.health < p.maxHealth) p.health = Math.min(p.maxHealth, p.health + hrs * 5);
     // flashlight battery
     if (p.flashlight) {
       p.battery = Math.max(0, p.battery - dt * 0.22);

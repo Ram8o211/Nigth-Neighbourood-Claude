@@ -147,6 +147,7 @@ export class Game {
   }
 
   private clearGame() {
+    this.tips = [];
     for (const r of this.rigs.values()) this.renderer.layers.remove(r.root);
     this.rigs.clear();
     if (this.effects) this.renderer.layers.remove(this.effects.group);
@@ -217,9 +218,10 @@ export class Game {
         this.ui.hideAll();
         this.ui.banner(world.townName, `Day 1 — ${formatClock(sim.time)}`);
         this.ui.message('Your uncle’s house is waiting. Follow the marker on the compass. [Click to look around]');
+        this.queueTips();
         this.input.lock();
         this.audio.music?.setState('day');
-        this.saveTo('auto', 'Arrival');
+        this.autosaveNow('Arrival');
       } catch (e) {
         console.error(e);
         this.ui.showError(`Failed to start a new game: ${e instanceof Error ? e.message : e}`);
@@ -244,6 +246,12 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ save / load
+
+  /** autosave; a failure (e.g. browser storage full) is reported, not swallowed */
+  autosaveNow(label?: string) {
+    const err = this.saveTo('auto', label);
+    if (err && err !== 'Nothing to save.') this.ui.message(`Autosave failed: ${err}`, 'warn');
+  }
 
   saveTo(slot: string, label?: string): string | null {
     const sim = this.sim;
@@ -411,6 +419,7 @@ export class Game {
       this.checkDiscoveries();
       this.story.update(dt);
       this.autosave();
+      this.showTips();
       if (this.story.ending && !this.ui.endingShown) {
         this.mode = 'ending';
         this.input.unlock();
@@ -499,7 +508,7 @@ export class Game {
         sim.player.energy = clamp(sim.player.energy + slept * 13, 0, 100);
         this.ui.message(ff.interrupted ? `You slept ${slept.toFixed(1)} hours.` : 'You wake up.', ff.interrupted ? 'warn' : 'info');
         sim.player.stance = 'stand';
-        if (!ff.interrupted) this.saveTo('auto');
+        if (!ff.interrupted) this.autosaveNow();
       }
       if (ff.reason === 'custody') this.releasePlayer();
       this.ff = null;
@@ -516,7 +525,7 @@ export class Game {
     sim.player.stance = 'lie';
     sim.player.flashlight = false;
     this.ui.fade(true, 'Sleeping...');
-    this.saveTo('auto');
+    this.autosaveNow();
   }
 
   waitHours(hours: number) {
@@ -534,11 +543,27 @@ export class Game {
     return t;
   }
 
+  /** first-minute onboarding: a few control tips, using the player's own key bindings */
+  private tips: { at: number; text: string }[] = [];
+  private queueTips() {
+    const k = (a: Parameters<Input['keyName']>[0]) => this.input.keyName(a);
+    const t0 = this.time;
+    this.tips = [
+      { at: t0 + 5, text: `Move with ${k('forward')}${k('left')}${k('back')}${k('right')} and the mouse. ${k('sprint')} sprints, ${k('crouch')} crouches.` },
+      { at: t0 + 14, text: `${k('interact')} interacts with doors, people and things. Hold ${k('interact')} for more (lock doors, pick locks...).` },
+      { at: t0 + 24, text: `${k('journal')} journal, ${k('map')} map, ${k('inventory')} inventory, ${k('wait')} wait, ${k('pause')} pause and save.` },
+      { at: t0 + 36, text: 'The clock is ticking. Night falls around 19:30. Find a flashlight before then.' },
+    ];
+  }
+  private showTips() {
+    while (this.tips.length && this.time >= this.tips[0].at && this.mode === 'playing') this.ui.message(this.tips.shift()!.text, 'info');
+  }
+
   private autosave() {
     const sim = this.sim!;
     if (sim.day() !== this.autosaveDay && sim.hour() > 7 && sim.hour() < 9 && sim.player.alive) {
       this.autosaveDay = sim.day();
-      this.saveTo('auto');
+      this.autosaveNow();
       this.ui.message('Autosaved.');
     }
   }
@@ -586,10 +611,6 @@ export class Game {
           this.story!.stats.kills++;
           this.ui.message(`${sim.actorName(e.a ?? -1)} is dead.`, 'warn');
         }
-        break;
-      case 'player_dead':
-        sim.player.health = 0;
-        sim.player.alive = false;
         break;
       case 'witness':
         if (e.b === 0 && (e.s === 'attack' || e.s === 'murder')) this.ui.message('Someone saw that.', 'warn');

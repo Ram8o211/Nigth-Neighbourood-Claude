@@ -38,8 +38,10 @@ export async function launch({ base, outDir, width = 1280, height = 720 }) {
       await page.waitForFunction(fn, arg, { timeout });
     },
     async shot(name) {
-      const p = resolve(outDir, name + '.png');
-      await page.screenshot({ path: p });
+      // NN_SHOT_EXT=jpg writes compact JPEGs (used for the screenshots in docs/)
+      const jpg = process.env.NN_SHOT_EXT === 'jpg';
+      const p = resolve(outDir, name + (jpg ? '.jpg' : '.png'));
+      await page.screenshot(jpg ? { path: p, type: 'jpeg', quality: 84 } : { path: p });
       console.log('  screenshot', p);
       return p;
     },

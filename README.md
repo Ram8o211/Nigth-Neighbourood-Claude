@@ -15,7 +15,7 @@ and end, built from scratch in TypeScript and three.js with no external art,
 audio or engine. See [the honest status](#status-and-known-limitations) at the
 bottom.
 
-![Arriving in town](docs/screenshots/street_day.png)
+![Arriving in town](docs/screenshots/street_day.jpg)
 
 ## Play
 
@@ -98,7 +98,19 @@ All bindings can be changed in *Settings*. The full rules are in
   resident's needs, activity, tasks, traits and memories, plus incidents and
   police cases.
 
-![Observer mode](docs/screenshots/observer.png)
+![Observer mode](docs/screenshots/observer.jpg)
+
+## Screenshots
+
+All screenshots were taken with software rendering (SwiftShader) in the test
+container; see [docs/TESTING.md](docs/TESTING.md).
+
+| | |
+| --- | --- |
+| ![Main menu](docs/screenshots/menu.jpg) | ![A neighbour](docs/screenshots/resident.jpg) |
+| ![Inside the uncle's house](docs/screenshots/interior_day.jpg) | ![Found in the morning](docs/screenshots/crime_scene.jpg) |
+| ![Night on Cedar Way](docs/screenshots/night_street.jpg) | ![Flashlight](docs/screenshots/flashlight_interior.jpg) |
+| ![Journal map](docs/screenshots/journal_map.jpg) | ![Ending](docs/screenshots/ending_win.jpg) |
 
 ## Project layout and architecture
 
@@ -123,7 +135,7 @@ npm run test:e2e     # builds, serves and drives the real game in headless Chrom
 Developer tools: `node scripts/run.mjs scripts/soak.ts <seed> <hours>` prints
 a timeline of a headless run; `node scripts/run.mjs scripts/bench.ts` measures
 generation and simulation cost; `?viewer&seed=…&hour=…&look=street|home|inside&lineup=8`
-renders a fixed view; `node e2e/drive.mjs e2e/screens.mjs docs/screenshots`
+renders a fixed view; `NN_SHOT_EXT=jpg node e2e/drive.mjs e2e/screens.mjs docs/screenshots`
 regenerates the screenshots. Results of the last runs are in
 [docs/TESTING.md](docs/TESTING.md).
 

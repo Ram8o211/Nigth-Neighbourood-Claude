@@ -1,0 +1,185 @@
+# Testing, performance and known limitations
+
+Everything below was produced by actually running the commands named; numbers
+are copied from their output. Where something was **not** measured it says so.
+
+## Test environment
+
+* Linux container, 4 vCPU Intel Xeon @ 2.1 GHz, 15 GB RAM, **no GPU**
+* Node.js 22.22, TypeScript 5.9.3 (strict), Vite 7.3.7, Vitest 4.1.12
+* Browser tests: Chromium 141 (playwright-core 1.56.1) headless, WebGL through
+  **SwiftShader** (software rasterisation), viewport 1280×720
+
+## Static checks
+
+`npm run typecheck` (`tsc --noEmit`, strict mode, `src/` and `tests/`): no errors.
+`npm run build`: succeeds; the bundle is one 948 kB JavaScript file (276 kB
+gzipped) plus CSS – there are no asset files because everything is generated.
+
+## Unit and simulation tests (`npm test`)
+
+28 tests in 4 files, all passing (last full run: 23 s wall time).
+
+| File | What it checks |
+| --- | --- |
+| `tests/worldgen.test.ts` (9) | Same seed → identical town, different seed → different town; required buildings for all three sizes; doors and windows sit in wall openings on the correct sides; every building entrance, room, door side and furniture use point is reachable from the player's house; every home has a telephone and the player's house a table; connected roads/sidewalks; street lights, porch lights and dark alleys (8 seeds). |
+| `tests/sim.test.ts` (10) | Population is reproducible and well formed (one killer, police, a chief, a lair); the simulation is deterministic (two runs of 1 500 steps are bit-identical); residents are at work by day and >80 % asleep at 3 am, couples side by side in their double bed; visibility drops in darkness, rises with a flashlight, is zero behind the observer and through walls; *saw / heard / told* memories are kept apart and hearsay loses confidence; repeated observations merge; melee hits in range, respects cooldowns, never hits through a wall, kills, opens an incident and spills blood; a killing witnessed by a neighbour who knows you raises your wanted level and opens a police case; police turn consistent witness descriptions into the right suspect and conflicting ones into none; **save → JSON → load into a freshly generated world → 1 200 more steps** is identical to never having saved. |
+| `tests/story.test.ts` (8) | Game start (bus stop, key, letter); weak or contradicting accusations are rejected; a well-supported accusation gets the killer arrested by the simulated police and produces the winning ending; death and running out of nights produce the losing endings; journal and story state survive serialisation; save validation rejects outdated format, other generator, older simulation, incomplete and corrupt data; empty and corrupt slots are reported without throwing. |
+| `tests/emergent.test.ts` (1) | Three towns run headless for three full days and nights with nobody scripting anything. Requires murders, discovered bodies, police cases and reports, no resident stuck on path failures, finite positions. |
+
+Output of the last emergent run (3 days, medium town, default director):
+
+| seed | murders | burglaries | discovered | cases | reports | arrests | ms/step |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| emerge-1 | 1 | 0 | 1 | 4 | 42 | 0 | 0.048 |
+| emerge-2 | 1 | 1 | 1 | 4 | 38 | 0 | 0.066 |
+| emerge-3 | 2 | 0 | 2 | 4 | 28 | 0 | 0.053 |
+
+Over five nights (`scripts/soak.ts`, six seeds) the police arrested the killer
+on their own in two seeds, on day 3, both times the right person; in the other
+four the case files did not name or describe anyone uniquely.
+
+## Browser smoke test (`npm run test:e2e`)
+
+`e2e/run-e2e.mjs` builds the game, serves the production bundle with
+`vite preview`, and drives it in headless Chromium through `e2e/smoke.mjs` with
+real key presses and mouse clicks. The page's game object is only used to
+read state, to teleport between distant places (walking across town at
+software-rendered frame rates would take minutes) and to aim the camera at a
+target. Checks:
+
+* every main-menu button opens its screen and *Back* returns; a settings
+  slider changes a setting and it is saved
+* *New Game → Begin* generates a town; HUD and objectives appear
+* W moves the player, arrow keys turn the camera
+* the uncle's front door starts locked, is targeted, and **E** unlocks and
+  opens it with the key; the player can walk in
+* the letter is on a table, is targeted, **E** opens it, closing it returns to
+  play and advances the objectives
+* **Tab** opens the inventory, **J** the journal, all journal tabs open, the
+  map tab draws
+* a neighbour can be targeted and talked to; introducing yourself makes them
+  known; the conversation closes
+* **T** → wait 1 hour advances the clock by 60 game minutes
+* **Esc** pauses, *Save Game → Slot 1* writes the save, *Resume* returns
+* a baseball bat swing (left mouse) hurts a neighbour, who flees
+* *Load Game → Slot 1* restores position and clock
+* **E** on the bed offers sleep and sleeping advances to the morning
+* **F2** opens observer mode, residents are listed, clicking one shows needs,
+  activity and memories, the *16x* time button can be pressed, *Exit*
+  returns to play
+* death shows the ending screen with restart options; *Main menu* returns and
+  now offers *Continue*
+* no uncaught page errors and no errors in the game loop
+
+Last run: **56 of 56 checks passed** in 524 s (most of the time is the
+software renderer drawing frames). The run log is printed to the console and
+saved as `e2e/out/e2e-results.json`.
+
+Screenshots of each step are written to `e2e/out/`; a selection is in
+`docs/screenshots/`.
+
+## Performance
+
+### Measured: simulation (headless, `scripts/bench.ts`, 24 game hours)
+
+| size | buildings | rooms | furniture | NPCs | generate | populate | ms / step | worst step |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| small | 27–30 | 101–127 | 373–451 | 18–21 | 65–123 ms | 54–70 ms | 0.044–0.051 | 28–57 ms |
+| medium | 44–67 | 176–254 | 634–911 | 26–28 | 63–123 ms | 38–47 ms | 0.048–0.072 | 7–19 ms |
+| large | 79–90 | 302–362 | 1064–1267 | 37–44 | 67–113 ms | 39–59 ms | 0.095–0.142 | 10–17 ms |
+
+At normal speed the game runs one step per frame, so the simulation costs
+well under 1 ms of a 16.7 ms frame on average. Occasional long steps come
+from long A* searches: over 48 game hours a medium town had 4 steps above 8 ms
+and 1 above 16 ms (worst single path search 24 ms); a large town had 17 above
+8 ms and 3 above 16 ms. These can show up as rare single-frame hitches.
+Sleeping fast-forwards at up to 60 steps per frame within a 14 ms budget.
+
+### Measured: in the browser under SwiftShader (1280×720, medium town)
+
+| setting | draw calls | triangles | sim ms/frame | JS ms/frame | frame interval |
+| --- | --- | --- | --- | --- | --- |
+| medium quality | 858 | 620 k | 1.8 | 112 | ~670 ms |
+| low quality | 558 | 383 k | 1.0 | 42 | ~470 ms |
+| low, no post-processing | – | – | 0.7 | 17 | ~360 ms |
+
+Draw calls and triangles include the shadow passes. A CPU profile of 15
+frames showed the main thread idle about 96 % of the time, i.e. waiting on the
+software rasteriser in the GPU process; JavaScript (three.js scene traversal,
+uniform uploads, HUD, simulation) accounts for the rest. **These frame rates
+(1.5–3 FPS) say nothing about real hardware**: they are what a CPU emulating a
+GPU achieves.
+
+### Not measured: real GPUs
+
+No GPU was available, so the 60 FPS target could **not be verified**. As an
+estimate only: about 560–860 draw calls and 0.4–0.6 M triangles per frame, a
+fixed pool of 4/8/12 shadowless point lights, a 1–2 k sun shadow map and a
+small flashlight shadow map are a
+moderate load that current discrete GPUs and recent integrated GPUs normally
+handle at 60 FPS at 1080p on *medium*; *low* (75 % resolution, no shadows, 4
+lights) is the fallback for weak integrated graphics. Expect the CPU side
+(three.js submitting ~900 draw calls plus ~1 ms of simulation) to cost a few
+milliseconds per frame. Please treat this as unverified until someone runs
+the game on real hardware (the FPS counter is in *Settings → Graphics*).
+
+## Bugs found by testing and fixed
+
+* Movement and interaction were blocked whenever pointer lock was not granted;
+  keyboard play now works without it, mouse look requires it, losing the lock
+  pauses the game.
+* The game started facing the back wall of the bus shelter.
+* The uncle's letter could be placed on a bathroom cabinet because some houses
+  had no table; houses had no telephone in some seeds. Every home now gets a
+  phone, the player's house a table, and items win over the furniture they lie
+  on when aiming.
+* The observer panel was not clickable (CSS) and was rebuilt every few frames,
+  which swallowed clicks; it is now built once and updated in place, and
+  entering observer mode releases the mouse.
+* Residents woken by noise or a hit were left standing inside their bed and
+  got pushed into sealed pockets between furniture, after which every path
+  failed (found by the emergent test). They now get up onto the bed's free
+  side, and an unstick safety net moves a trapped NPC to the room's door when
+  nobody is looking.
+* Furniture was single-occupancy: in every couple only one partner could
+  sleep, the other re-planned every few minutes all night; meals failed when
+  someone sat on the sofa. Beds, sofas and benches now have capacity and seat
+  slots.
+* Residents without a job had no income and re-planned a shopping trip every
+  hour; the burglar abandoned every attempt when anybody within 25 m glimpsed
+  them.
+* Police cases never progressed without a named culprit (see above).
+* Setting the player's health to zero did not end the game (regeneration ran
+  first) and starvation skipped the normal death handling.
+* Blood decals (and feet) were drawn under paths, driveways and roads, which
+  the renderer lifts 1–3 cm above the terrain; renderer and simulation now share
+  one ground-height table (found while taking the crime-scene screenshot).
+* Main Street labels on the journal map overlapped into an unreadable jumble
+  and the map did not fit a 720 px screen; public buildings are now numbered
+  with a legend.
+* Save results were shown on the hidden HUD while the pause menu was open,
+  and failed autosaves were silent.
+
+## Known limitations
+
+* **Performance on real GPUs is unmeasured** (see above).
+* Visual style is deliberately simple: characters are rounded-box figures with
+  procedural animation (no skinned meshes or motion capture), buildings are
+  single-storey, there are no vehicles moving.
+* The town is flat apart from small floor-height differences; there are no
+  stairs or upper floors.
+* Dialogue is menu-based and generated from memories; there is no free text or
+  voice.
+* NPC pathfinding is grid A* with a per-step budget; very rarely an NPC takes
+  an odd route or pauses while waiting for a path, and long searches can cause
+  an occasional frame hitch.
+* Police only arrest when witnesses name someone, descriptions fit exactly one
+  person, or the chief accepts the player's accusation; they do not analyse
+  physical evidence on their own.
+* Audio is synthesised; it is atmospheric but obviously not recorded foley.
+* Saves live in the browser's `localStorage` (about 5 MB per site). A save is
+  about 320 kB at the start and 375 kB after five days in a medium town, so the
+  autosave and three slots fit, but other sites' data on the same origin could
+  crowd them out (the game reports a failed save instead of crashing).
+* Tested only in Chromium. Firefox and Safari were not tested.
