@@ -1,7 +1,7 @@
 import type { Simulation } from './simulation';
 import type { Activity, NpcState, Task } from './types';
 import { clearTasks } from './tasks';
-import { isDark, isNight } from './config';
+import { isDark, isNight, SHOP_COST } from './config';
 
 /** is hour h inside the window [a, b) where a, b may exceed 24 */
 export function inWindow(h: number, a: number, b: number): boolean {
@@ -115,7 +115,7 @@ export function chooseRoutine(sim: Simulation, npc: NpcState) {
   const bedLead = npc.building === npc.homeId ? 0 : travelHours(sim, npc, sim.world.buildings[npc.homeId].insideFront.x, sim.world.buildings[npc.homeId].insideFront.z);
   if (inWindow(h, s.bed - bedLead, s.wake) || npc.needs.energy < 12) options.push({ kind: 'sleep', u: 85 + (npc.needs.energy < 12 ? 20 : 0) });
   if (npc.needs.hunger > 55) options.push({ kind: 'eat', u: 55 + npc.needs.hunger * 0.4 });
-  if ((npc.ctl.needGroceries || sim.foodCount(npc.homeId) < 2) && inWindow(h, 9, 18.3) && businessOpen(sim, 'store')) options.push({ kind: 'shop', u: 52 });
+  if ((npc.ctl.needGroceries || sim.foodCount(npc.homeId) < 2) && npc.money >= SHOP_COST && inWindow(h, 9, 18.3) && businessOpen(sim, 'store')) options.push({ kind: 'shop', u: 52 });
   if (npc.smoker && sim.time - Number(npc.ctl.lastSmoke ?? 0) > 3 * 3600 && !isNight(h)) options.push({ kind: 'smoke', u: 46 });
   const fearful = npc.avoidNightOut || npc.needs.fear > 55;
   if (inWindow(h, 17.5, s.bed - 0.7)) {
@@ -183,7 +183,7 @@ export function planRoutine(sim: Simulation, npc: NpcState, kind: string) {
         }
       }
       npc.ctl.needGroceries = true;
-      if (businessOpen(sim, 'store')) {
+      if (businessOpen(sim, 'store') && npc.money >= SHOP_COST) {
         planRoutine(sim, npc, 'shop');
         return;
       }

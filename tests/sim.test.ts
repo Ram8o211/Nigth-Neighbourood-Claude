@@ -72,7 +72,14 @@ describe('simulation core', () => {
     runUntilHour(sim, 3);
     const residents = sim.npcs.filter((n) => n.alive && n.role === 'resident' && !n.inCustody);
     const asleep = residents.filter((n) => n.sleeping);
-    expect(asleep.length / residents.length).toBeGreaterThan(0.6);
+    expect(asleep.length / residents.length).toBeGreaterThan(0.8);
+    // couples share a double bed: both partners get to sleep in it
+    const shared = sim.world.furniture.filter((f) => f.use === 'bed' && asleep.filter((n) => n.usingFurniture === f.id).length === 2);
+    expect(shared.length).toBeGreaterThan(0);
+    for (const f of shared) {
+      const [a, b] = asleep.filter((n) => n.usingFurniture === f.id);
+      expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan(0.5); // side by side, not on top of each other
+    }
     // and most of the sleepers are at home
     const home = asleep.filter((n) => n.building === n.homeId);
     expect(home.length / Math.max(1, asleep.length)).toBeGreaterThan(0.8);

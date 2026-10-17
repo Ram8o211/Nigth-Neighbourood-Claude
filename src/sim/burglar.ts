@@ -66,12 +66,15 @@ export function burgleTask(sim: Simulation, b: NpcState, task: Task, dt: number)
   b.ctl.bsT = Number(b.ctl.bsT ?? 0) + dt;
   const home = sim.world.buildings[b.homeId];
   const h = sim.hour();
-  // spotted? run
+  // spotted? run. On the way a hooded walker only worries about people close by;
+  // at the window or inside the house anyone who sees them clearly is too many.
   if (['travel', 'entry', 'inside'].includes(bs)) {
+    const range = bs === 'travel' ? 9 : 25;
     for (const a of sim.actors) {
       if (a === b || !a.alive) continue;
-      if (Math.abs(a.x - b.x) > 25 || Math.abs(a.z - b.z) > 25) continue;
+      if (Math.abs(a.x - b.x) > range || Math.abs(a.z - b.z) > range) continue;
       if (a.kind === 'npc' && (a as NpcState).sleeping) continue;
+      if (a.id === sim.killerId) continue; // two of a kind keep out of each other's way
       if (visibility(sim, a, b) > 0.45) {
         setBs(b, 'flee');
         break;

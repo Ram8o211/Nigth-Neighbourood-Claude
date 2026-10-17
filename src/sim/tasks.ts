@@ -2,7 +2,7 @@ import { approachAngle, yawTo } from '../core/math';
 import type { Simulation } from './simulation';
 import type { NpcState, Task } from './types';
 import { followPath, requestPath, doorPos, animForSpeed } from './movement';
-import { CFG } from './config';
+import { CFG, SHOP_COST } from './config';
 import { shareGossip } from './memory';
 import type { Furniture } from '../world/types';
 
@@ -10,13 +10,44 @@ export type TaskResult = 'running' | 'done' | 'failed';
 
 export const DIR_YAW = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
 
-export function seatPos(f: Furniture) {
+/** how many people can use a piece of furniture at once */
+export function capacity(f: Furniture) {
+  const long = Math.max(f.w, f.d);
+  const short = Math.min(f.w, f.d);
+  switch (f.use) {
+    case 'bed':
+      return short >= 1.3 ? 2 : 1;
+    case 'sofa':
+    case 'pew':
+      return long >= 2.6 ? 3 : long >= 1.8 ? 2 : 1;
+    case 'chair':
+      return long >= 1.4 ? 2 : 1; // benches
+    case 'register':
+    case 'bartap':
+      return 99;
+    default:
+      return 1;
+  }
+}
+
+/** where an actor sits or lies on a piece of furniture; slot spreads several users out */
+export function seatPos(f: Furniture, slot = 0) {
+  const cap = Math.min(3, capacity(f));
+  const xLong = f.w >= f.d;
+  // offset along the axis people sit side by side on (beds: across the width)
+  const along = (axisX: boolean, spacing: number) => {
+    const o = cap > 1 ? (slot - (cap - 1) / 2) * spacing : 0;
+    return axisX ? { ox: o, oz: 0 } : { ox: 0, oz: o };
+  };
   switch (f.use) {
     case 'bed':
     case 'cellbed':
-    case 'exam':
-      return { x: f.x, z: f.z, pose: 'lie' as const };
-    case 'sofa': {
+    case 'exam': {
+      const { ox, oz } = along(!xLong, 0.75);
+      return { x: f.x + ox, z: f.z + oz, pose: 'lie' as const };
+    }
+    case 'sofa':
+    case 'pew': {
       const v = [
         [0, -1],
         [1, 0],
@@ -24,12 +55,14 @@ export function seatPos(f: Furniture) {
         [-1, 0],
       ][f.face];
       const depth = f.face === 0 || f.face === 2 ? f.d : f.w;
-      return { x: f.x + v[0] * depth * 0.12, z: f.z + v[1] * depth * 0.12, pose: 'sit' as const };
+      const { ox, oz } = along(xLong, 0.62);
+      return { x: f.x + v[0] * depth * 0.12 + ox, z: f.z + v[1] * depth * 0.12 + oz, pose: 'sit' as const };
     }
     case 'chair':
-    case 'pew':
-    case 'barstool':
-      return { x: f.x, z: f.z, pose: 'sit' as const };
+    case 'barstool': {
+      const { ox, oz } = along(xLong, 0.6);
+      return { x: f.x + ox, z: f.z + oz, pose: 'sit' as const };
+    }
     default:
       return { x: f.ux, z: f.uz, pose: 'stand' as const };
   }
@@ -117,10 +150,10 @@ function applyEffect(sim: Simulation, npc: NpcState, effect: string | undefined,
       npc.money += 45;
       break;
     case 'shop':
-      if (npc.money >= 18) {
-        npc.money -= 18;
+      if (npc.money >= SHOP_COST) {
+        npc.money -= SHOP_COST;
         npc.carriesGroceries = 4;
-      }
+      } else npc.ctl.fail_shop = sim.time;
       break;
     case 'stock':
       if (npc.carriesGroceries > 0 && f && f.container) {
@@ -181,14 +214,25 @@ export function runTask(sim: Simulation, npc: NpcState, t: Task, dt: number): Ta
       const f = sim.world.furniture[t.target!];
       if (!f || f.kind === 'none') return 'failed';
       if (!t.started) {
-        const occupied = sim.npcs.some((o) => o !== npc && o.alive && o.usingFurniture === f.id);
-        if (occupied && f.use !== 'register' && f.use !== 'bartap') return 'failed';
+        const users = sim.npcs.filter((o) => o !== npc && o.alive && o.usingFurniture === f.id);
+        if (users.length >= capacity(f)) {
+          // somebody is in the way: eat or rest standing instead of giving up the plan
+          if (t.effect === 'eat_fridge' || t.effect === 'eat_diner' || t.effect === 'relax' || t.effect === 'drink') {
+            t.kind = 'wait';
+            return 'running';
+          }
+          return 'failed';
+        }
         const r = stepGoto(sim, npc, t, dt, f.ux, f.uz);
         if (r !== 'done') return r;
         t.started = true;
         t.t = 0;
         npc.usingFurniture = f.id;
-        const seat = seatPos(f);
+        const taken = new Set(users.map((o) => Number(o.ctl.seatSlot ?? 0)));
+        let slot = 0;
+        while (taken.has(slot)) slot++;
+        npc.ctl.seatSlot = slot;
+        const seat = seatPos(f, slot);
         const pose = t.pose === 'lie' || t.pose === 'sit' ? t.pose : seat.pose === 'stand' ? 'stand' : seat.pose;
         if (pose === 'sit' || pose === 'lie') {
           npc.x = seat.x;
@@ -354,6 +398,7 @@ export function runTasks(sim: Simulation, npc: NpcState, dt: number) {
     npc.path = null;
     npc.pathGoal = null;
     if (r === 'failed') {
+      sim.onTaskFail?.(npc, t);
       // abandon the rest of the plan; the brain will choose again
       if (npc.usingFurniture >= 0) endUse(sim, npc);
       npc.tasks.length = 0;

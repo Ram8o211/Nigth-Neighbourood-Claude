@@ -116,6 +116,18 @@ describe('procedural neighbourhood generation', () => {
     }
   });
 
+  it('gives every home a telephone and the player a table for the letter', () => {
+    for (const seed of SEEDS) {
+      const w = generateWorld({ seed, size: 'medium', density: 0.85, nights: 5 });
+      for (const b of w.buildings.filter((b) => b.kind === 'house')) {
+        const phone = w.furniture.some((f) => f.buildingId === b.id && f.use === 'phone' && f.kind !== 'none');
+        expect(phone, `${seed}: ${b.address} has a phone`).toBe(true);
+      }
+      const home = w.buildings[w.playerHouseId];
+      expect(w.furniture.some((f) => f.buildingId === home.id && (f.use === 'table' || f.use === 'desk') && f.kind !== 'none'), `${seed}: player table`).toBe(true);
+    }
+  });
+
   it('builds a connected road and sidewalk network', () => {
     for (const seed of SEEDS) {
       const w = generateWorld({ seed, size: 'medium', density: 0.85, nights: 5 });

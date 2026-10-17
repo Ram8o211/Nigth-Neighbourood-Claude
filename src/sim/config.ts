@@ -23,6 +23,9 @@ export const CFG = {
   startHour: 9,
 };
 
+/** what a basket of groceries costs at the store */
+export const SHOP_COST = 18;
+
 export function isDark(hour: number) {
   return hour >= 18.6 || hour < 7.2;
 }

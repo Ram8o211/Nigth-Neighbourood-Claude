@@ -340,6 +340,8 @@ export class Game {
     if (!this.sim) return;
     this.observer = new Observer(this);
     this.mode = 'observer';
+    // free the mouse for the inspector panel; clicking the view captures it again for flying
+    this.input.unlock();
     this.ui.hideAll();
     this.ui.showObserver();
   }

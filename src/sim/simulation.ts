@@ -110,6 +110,8 @@ export class Simulation {
   onPlayerArrestAttempt: ((officer: NpcState) => void) | null = null;
   onPathFail: ((npc: NpcState, x: number, z: number) => void) | null = null;
   onActivity: ((npc: NpcState, kind: string) => void) | null = null;
+  /** diagnostics: a task in an npc's plan failed */
+  onTaskFail: ((npc: NpcState, task: Task) => void) | null = null;
 
   constructor(world: WorldData) {
     this.world = world;
@@ -832,6 +834,8 @@ export class Simulation {
     const day = this.day();
     if (this.misc.lastDaily === day) return;
     this.misc.lastDaily = day;
+    // pensions, benefits, royalties: people without a workplace still get by
+    for (const n of this.npcs) if (n.alive && n.workId < 0 && !n.inCustody) n.money += 20;
     for (const inc of this.incidents) {
       if (inc.discovered) continue;
       if (inc.kind === 'burglary' || inc.kind === 'breakin') {

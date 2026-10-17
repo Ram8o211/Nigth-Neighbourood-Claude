@@ -1,11 +1,13 @@
 import type { Game } from './game';
 import { F_BLOCK } from '../world/grid';
 import { updateLocation } from '../sim/movement';
+import { kill } from '../sim/combat';
 
 /**
- * Small automation surface used by the browser smoke tests (window.__nnTest).
- * It only reads state and moves the player/camera; all gameplay in the tests
- * still goes through real key presses and UI clicks.
+ * Small automation surface used by the browser smoke tests and the screenshot
+ * script (window.__nnTest). It moves the player/camera and can stage a scene
+ * for a screenshot; gameplay in the smoke test itself goes through real key
+ * presses and UI clicks.
  */
 export function installTestApi(game: Game) {
   const api = {
@@ -46,6 +48,18 @@ export function installTestApi(game: Game) {
       p.yaw = Math.atan2(tx - x, -(tz - z));
       p.pitch = Math.atan2(ty - (p.y + 1.62), Math.max(0.3, Math.hypot(tx - x, tz - z)));
       game.player?.findTarget();
+    },
+    /** staging for screenshots: a violent death with blood */
+    kill(id: number, by: number) {
+      const sim = game.sim!;
+      const t = sim.actors[id];
+      if (!t || !t.alive) return;
+      sim.splatterBlood(t.x, t.z, t.y + 1.1, t.yaw + Math.PI, 1);
+      kill(sim, t, by, 'stabbed');
+    },
+    /** staging: damage a window (1 cracks it, 99 shatters it) */
+    hitWindow(id: number, dmg: number) {
+      game.sim!.damageWindow(id, dmg, game.sim!.killerId);
     },
   };
   (window as unknown as { __nnTest: typeof api }).__nnTest = api;
