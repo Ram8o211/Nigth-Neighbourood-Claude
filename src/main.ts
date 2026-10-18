@@ -21,6 +21,8 @@ if (params.has('viewer')) {
     installTestApi(game);
   } catch (err) {
     console.error(err);
+    // the start-up check in index.html leaves this explanation alone
+    (window as unknown as { __bootFailed: boolean }).__bootFailed = true;
     root.innerHTML = `<div class="screen error-screen"><h1>Night Neighbour could not start</h1><p>${String((err as Error)?.message ?? err)}</p><p>A browser with WebGL2 support is required.</p></div>`;
   }
 }

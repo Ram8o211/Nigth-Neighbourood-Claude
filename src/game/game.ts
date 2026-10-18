@@ -13,7 +13,7 @@ import { PlayerController } from './player';
 import { Journal } from './journal';
 import { Story } from './story';
 import { deviceQuality, loadSettings, saveSettings, type Settings } from './settings';
-import { writeSave, readSave, type SaveGame, SAVE_VERSION } from './save';
+import { writeSave, readSave, deleteSave, type SaveGame, SAVE_VERSION } from './save';
 import { WORLD_VERSION } from '../world/gen/generator';
 import { SIM_VERSION } from '../sim/simulation';
 import { CFG, isDark } from '../sim/config';
@@ -66,6 +66,9 @@ export class Game {
   /** fast-forward: target game time and speed multiplier */
   ff: { until: number; speed: number; reason: 'sleep' | 'wait' | 'custody'; interrupted: boolean } | null = null;
   private last = performance.now();
+  /** touch frame cap: time owed to the next frame, and when the loop last ran */
+  private frameBudget = 0;
+  private lastTick = performance.now();
   private fpsAcc = 0;
   private fpsN = 0;
   fps = 0;
@@ -109,12 +112,12 @@ export class Game {
         // phones often discard background tabs: keep the progress
         this.saveOnLeave();
         this.audio.suspend();
-      } else if (this.mode === 'dialog' || this.mode === 'observer') this.audio.resume();
+      } else if (this.mode !== 'paused') this.audio.resume();
     });
     window.addEventListener('pagehide', () => this.saveOnLeave());
     // iOS interrupts audio for calls and alarms; a later touch may wake it again
     document.addEventListener('pointerup', () => {
-      if (this.mode === 'playing' || this.mode === 'dialog' || this.mode === 'observer') this.audio.wake();
+      if (this.mode !== 'paused') this.audio.wake();
     });
     // the phone's Back gesture pauses instead of leaving the game
     window.addEventListener('popstate', () => {
@@ -132,11 +135,15 @@ export class Game {
     });
   }
 
-  /** autosave when the page is hidden or closed, unless the game is over or the player is being arrested */
+  /**
+   * When the page is hidden or closed (phones often discard background tabs), keep the game in its own
+   * 'suspend' slot: Continue resumes it, while the morning checkpoint 'auto' that the death screen
+   * offers stays untouched. Not during an arrest, a sleep or custody fast-forward, or after the end.
+   */
   private saveOnLeave() {
     const live = this.mode === 'playing' || this.mode === 'dialog' || this.mode === 'paused';
-    if (!live || !this.story || this.story.flags.observerOnly || this.arrestOfficer >= 0 || !this.sim?.player.alive) return;
-    this.saveTo('auto');
+    if (!live || !this.story || this.story.flags.observerOnly || this.arrestOfficer >= 0 || this.ff || !this.sim?.player.alive) return;
+    this.saveTo('suspend', `Where you left off — ${this.sim.world.townName}, day ${this.sim.day() + 1}, ${formatClock(this.sim.time)}`);
   }
 
   /**
@@ -150,7 +157,7 @@ export class Game {
     if (!history.state?.nn) history.pushState({ nn: 1 }, '');
   }
 
-  private enterFullscreen() {
+  enterFullscreen() {
     const done = document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
     done
       ?.then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape'))
@@ -330,6 +337,8 @@ export class Game {
   saveTo(slot: string, label?: string): string | null {
     const sim = this.sim;
     if (!sim || !this.journal || !this.story || this.story.ending) return 'Nothing to save.';
+    // a save taken in the cells would wake up locked in with no way out
+    if (sim.player.inCustody || this.ff?.reason === 'custody') return 'You cannot save while in custody.';
     const save: SaveGame = {
       saveVersion: SAVE_VERSION,
       worldVersion: WORLD_VERSION,
@@ -445,9 +454,14 @@ export class Game {
   private frame() {
     const now = performance.now();
     if (this.input.touchMode) {
-      // phones: at most 60 fps on 90/120 Hz screens, and slow redraws behind the pause and ending screens
+      // phones: about 60 fps on 90/120/144 Hz screens (a frame budget, so 90 Hz alternates one and two
+      // refreshes), and slow redraws behind the pause and ending screens
       const gap = now - this.last;
-      if (gap < 10 || ((this.mode === 'paused' || this.mode === 'ending') && gap < 100)) return;
+      if ((this.mode === 'paused' || this.mode === 'ending') && gap < 100) return;
+      this.frameBudget = Math.min(this.frameBudget + now - this.lastTick, 1000 / 30);
+      this.lastTick = now;
+      if (this.frameBudget < 1000 / 60 - 1) return;
+      this.frameBudget -= 1000 / 60;
     }
     this.ui?.touch.update();
     const pf = this.perf;
@@ -501,6 +515,8 @@ export class Game {
       this.autosave();
       this.showTips();
       if (this.story.ending && !this.ui.endingShown) {
+        // the finished game must not come back through Continue
+        deleteSave('suspend');
         this.mode = 'ending';
         this.input.unlock();
         this.ui.showEnding(this.story.ending);
@@ -650,6 +666,8 @@ export class Game {
 
   private autosave() {
     const sim = this.sim!;
+    // in the cells the morning save waits for the release
+    if (sim.player.inCustody || this.ff?.reason === 'custody') return;
     if (sim.day() !== this.autosaveDay && sim.hour() > 7 && sim.hour() < 9 && sim.player.alive) {
       this.autosaveDay = sim.day();
       this.autosaveNow();

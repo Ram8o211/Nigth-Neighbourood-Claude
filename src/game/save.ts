@@ -31,7 +31,8 @@ export interface SaveMeta {
 
 // prefixed: every GitHub Pages site of an account shares the same origin and localStorage
 const PREFIX = 'night-neighbour-beta/save.';
-export const SLOTS = ['auto', 'slot1', 'slot2', 'slot3'];
+/** 'auto' is the morning checkpoint; 'suspend' is written when the page is hidden or closed */
+export const SLOTS = ['auto', 'suspend', 'slot1', 'slot2', 'slot3'];
 
 export function writeSave(slot: string, s: SaveGame): string | null {
   try {

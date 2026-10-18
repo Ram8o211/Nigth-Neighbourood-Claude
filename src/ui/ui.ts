@@ -72,11 +72,8 @@ export class UI {
     this.hud.style.display = 'none';
     this.touch = new TouchControls(game, this.root, this.fadeEl);
     const touchClass = (on: boolean) => document.body.classList.toggle('touch', on);
-    game.input.onTouchMode = (on) => {
-      touchClass(on);
-      // menus word their hints for the input in use
-      if (game.mode === 'menu') this.showMainMenu();
-    };
+    // screens already open keep their wording until reopened: re-rendering here would swallow the press
+    game.input.onTouchMode = touchClass;
     touchClass(game.input.touchMode);
   }
 
@@ -230,13 +227,13 @@ export class UI {
   showSaves(saving: boolean, back?: () => void) {
     const back2 = back ?? (() => this.showMainMenu());
     const saves = listSaves();
-    const rows = SLOTS.filter((s) => saving ? s !== 'auto' : true).map((slot) => {
+    const rows = SLOTS.filter((s) => (saving ? s !== 'auto' && s !== 'suspend' : true)).map((slot) => {
       const meta = saves.find((s) => s.slot === slot);
       const when = meta ? new Date(meta.savedAt).toLocaleString() : '';
       return h(
         'tr',
         {},
-        h('td', {}, slot === 'auto' ? 'Autosave' : `Slot ${slot.slice(4)}`),
+        h('td', {}, slot === 'auto' ? 'Autosave' : slot === 'suspend' ? 'Last session' : `Slot ${slot.slice(4)}`),
         h('td', {}, meta ? meta.label : h('span', { class: 'muted' }, 'empty'), meta && !meta.valid ? h('div', { class: 'muted' }, meta.reason ?? '') : null),
         h('td', { class: 'muted' }, when),
         h(

@@ -996,6 +996,12 @@ table.list th {
   background: var(--bg);
   pointer-events: auto;
 }
+.t-rotate .t-rotate-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+}
 .t-rotate .t-rotate-icon {
   font-size: 54px;
   margin-bottom: 10px;

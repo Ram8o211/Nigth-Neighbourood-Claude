@@ -542,9 +542,9 @@ export class PlayerController {
     if (this.holdAction) {
       if (!holding || t.kind === 'none') {
         // released early: short press behaviour. Finger taps on a touch button last longer than key
-        // taps, and letting go of a short hold (lock, drag, search) before it completes is a tap too.
+        // taps, so on touch letting go of a short hold (lock, drag, search) before it completes is a tap too.
         const action = this.holdAction;
-        const short = this.holdT < (inp.touchMode ? 0.4 : 0.25) || (this.holdNeeded <= 0.6 && this.holdT < this.holdNeeded);
+        const short = inp.touchMode ? this.holdT < 0.4 || (this.holdNeeded <= 0.6 && this.holdT < this.holdNeeded) : this.holdT < 0.25;
         this.holdAction = '';
         this.holdT = 0;
         if (short) this.pressAction(action);

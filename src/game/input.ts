@@ -117,11 +117,12 @@ export class Input {
     window.addEventListener(
       'pointerdown',
       (e) => {
+        // a pen can stand in for either (a desktop tablet or an iPad pencil): it does not switch
         if (e.pointerType === 'mouse') this.lastPointer = 'mouse';
-        else {
+        else if (e.pointerType === 'touch') {
           this.lastPointer = 'touch';
           this.lastTouchAt = performance.now();
-        }
+        } else return;
         this.updateTouchMode();
       },
       true,
@@ -254,6 +255,9 @@ export class Input {
   }
 }
 
+/** an element that takes typed text (sliders, checkboxes and selects still let game keys like Esc through) */
 function isTextField(t: EventTarget | null) {
-  return t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  if (!(t instanceof HTMLElement)) return false;
+  if (t.tagName === 'TEXTAREA' || t.isContentEditable) return true;
+  return t instanceof HTMLInputElement && ['text', 'search', 'number', 'email', 'url', 'password', 'tel'].includes(t.type);
 }

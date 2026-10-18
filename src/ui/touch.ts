@@ -20,7 +20,8 @@ export class TouchControls {
   private stickBase: HTMLElement;
   private stickKnob: HTMLElement;
   private rotate: HTMLElement;
-  private stick: { id: number; ox: number; oy: number } | null = null;
+  /** the stick: neutral where the thumb landed (ox, oy); its ring is drawn at (bx, by), kept on screen */
+  private stick: { id: number; ox: number; oy: number; bx: number; by: number } | null = null;
   private look: { id: number; x: number; y: number } | null = null;
   /** pointerId -> pressed button */
   private held = new Map<number, Btn>();
@@ -28,6 +29,8 @@ export class TouchControls {
   private visibleMode = '';
   /** the game paused itself because the phone was turned upright */
   private pausedByRotation = false;
+  /** the player chose the pause menu over the rotate notice (rotation lock, split screen) */
+  private rotateDismissed = false;
   private wakeLock: { release(): Promise<void> } | null = null;
   private wakePending = false;
 
@@ -77,7 +80,23 @@ export class TouchControls {
     add('up', 'UP', 'o', key('dodge', true));
     add('down', 'DOWN', 'o', key('crouch', true));
     this.rotate = div('t-rotate');
-    this.rotate.innerHTML = '<div><div class="t-rotate-icon">⟳</div>Turn your phone sideways to play.<div class="muted">The game is paused.</div></div>';
+    this.rotate.innerHTML =
+      '<div><div class="t-rotate-icon">⟳</div>Turn your phone sideways to play.<div class="muted">The game is paused. If the screen does not turn, switch off rotation lock.</div><div class="t-rotate-buttons"></div></div>';
+    const rotateButtons = this.rotate.querySelector('.t-rotate-buttons')!;
+    if (document.fullscreenEnabled) {
+      // full screen can lock landscape again (Android), e.g. after Back left full screen
+      const fs = document.createElement('button');
+      fs.textContent = 'Full screen';
+      fs.addEventListener('click', () => game.enterFullscreen());
+      rotateButtons.append(fs);
+    }
+    const menu = document.createElement('button');
+    menu.textContent = 'Menu';
+    menu.addEventListener('click', () => {
+      this.rotateDismissed = true;
+      this.rotate.style.display = 'none';
+    });
+    rotateButtons.append(menu);
     this.rotate.style.display = 'none';
     this.el.style.display = 'none';
     // below the HUD's modal layers and the observer panel; the rotate notice covers everything
@@ -94,6 +113,53 @@ export class TouchControls {
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) this.wakePending = false;
     });
+    this.clickSecondFingerTaps();
+  }
+
+  /**
+   * Browsers never turn a tap into a click while another finger is on the screen, so with a thumb
+   * resting on the stick, menu and dialog buttons would ignore taps. Such a tap clicks its button
+   * when the finger lifts; a native click that may still follow is dropped.
+   */
+  private clickSecondFingerTaps() {
+    const touches = new Set<number>();
+    const presses = new Map<number, { btn: HTMLButtonElement; multi: boolean }>();
+    let synthetic: { btn: HTMLButtonElement; until: number } | null = null;
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (e.pointerType !== 'touch') return;
+        synthetic = null;
+        touches.add(e.pointerId);
+        if (touches.size > 1) for (const p of presses.values()) p.multi = true;
+        const btn = (e.target as Element | null)?.closest?.('button');
+        if (btn && !this.el.contains(btn)) presses.set(e.pointerId, { btn, multi: touches.size > 1 });
+      },
+      true,
+    );
+    const lift = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      touches.delete(e.pointerId);
+      const p = presses.get(e.pointerId);
+      presses.delete(e.pointerId);
+      if (!p || !p.multi || e.type !== 'pointerup' || !p.btn.isConnected || p.btn.disabled) return;
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      if (!under || !p.btn.contains(under)) return;
+      synthetic = { btn: p.btn, until: performance.now() + 600 };
+      p.btn.click();
+    };
+    document.addEventListener('pointerup', lift, true);
+    document.addEventListener('pointercancel', lift, true);
+    document.addEventListener(
+      'click',
+      (e) => {
+        if (!synthetic || !e.isTrusted || performance.now() > synthetic.until || !synthetic.btn.contains(e.target as Node)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        synthetic = null;
+      },
+      true,
+    );
   }
 
   private onDown(e: PointerEvent) {
@@ -114,12 +180,11 @@ export class TouchControls {
       return;
     }
     if (t === this.moveZone && !this.stick) {
-      // the stick appears under the thumb, kept clear of the screen edges
-      const ox = clamp(e.clientX, STICK_R + 8, innerWidth - STICK_R - 8);
-      const oy = clamp(e.clientY, STICK_R + 8, innerHeight - STICK_R - 8);
-      this.stick = { id: e.pointerId, ox, oy };
+      // the stick is neutral where the thumb lands; its ring is drawn clear of the screen edges
+      const bx = clamp(e.clientX, STICK_R + 8, innerWidth - STICK_R - 8);
+      const by = clamp(e.clientY, STICK_R + 8, innerHeight - STICK_R - 8);
+      this.stick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, bx, by };
       this.el.classList.add('sticking');
-      this.placeStick(ox, oy, 0, 0);
       this.moveStick(e.clientX, e.clientY);
       return;
     }
@@ -165,7 +230,7 @@ export class TouchControls {
     const k = l < DEAD ? 0 : (l - DEAD) / (1 - DEAD) / Math.max(l, 1e-6);
     inp.moveX = dx * k;
     inp.moveY = dy * k;
-    this.placeStick(s.ox, s.oy, dx * STICK_R, dy * STICK_R);
+    this.placeStick(s.bx, s.by, s.ox - s.bx + dx * STICK_R, s.oy - s.by + dy * STICK_R);
     this.stickBase.classList.toggle('sprint', inp.stickSprint);
   }
 
@@ -202,17 +267,20 @@ export class TouchControls {
   update() {
     const g = this.game;
     const inp = g.input;
-    const portrait = innerHeight > innerWidth;
-    const upright = inp.touchMode && portrait;
+    // phones play sideways; tablets (and split-screen windows on them) may play upright
+    const phone = Math.min(screen.width, screen.height) < 600;
+    const upright = inp.touchMode && phone && innerHeight > innerWidth;
+    if (g.mode === 'playing') this.rotateDismissed = false;
     if (upright && g.mode === 'playing') {
       g.pause();
       this.pausedByRotation = true;
     } else if (!upright && this.pausedByRotation) {
       this.pausedByRotation = false;
-      if (g.mode === 'paused') g.resume();
+      // back to where the game was, unless the player went into the pause menu meanwhile
+      if (g.mode === 'paused' && !this.rotateDismissed) g.resume();
     }
     if (g.mode !== 'paused') this.pausedByRotation = false;
-    const rotateShown = upright && (g.mode === 'observer' || this.pausedByRotation);
+    const rotateShown = upright && !this.rotateDismissed && (g.mode === 'observer' || this.pausedByRotation);
     this.rotate.style.display = rotateShown ? '' : 'none';
 
     const mode = !inp.touchMode || rotateShown ? '' : g.mode === 'playing' ? 'p' : g.mode === 'observer' ? 'o' : '';

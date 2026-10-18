@@ -46,7 +46,7 @@
         if (/[?&]viewer\b/.test(location.search)) return;
         var box = null;
         function show(why) {
-          if (box || window.__game) return;
+          if (box || window.__game || window.__bootFailed) return;
           box = document.createElement('div');
           box.className = 'boot-error';
           box.innerHTML =

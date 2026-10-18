@@ -255,6 +255,36 @@ export default async function mobile(page, h) {
     check('HIT with a second finger swings the bat', hp < target.hp, `hp ${target.hp} -> ${hp.toFixed(0)}`);
   } else check('a neighbour outside to hit', false);
 
+  // ---------------------------------------------------------------- a thumb resting at the screen edge
+  await t.start(0, 14, 384);
+  await h.frames(3);
+  const edge = await h.eval(() => ({ mx: window.__game.input.moveX, my: window.__game.input.moveY }));
+  await t.end(0);
+  check('a thumb landing at the screen edge does not walk', edge.mx === 0 && edge.my === 0, `stick ${edge.mx.toFixed(2)},${edge.my.toFixed(2)}`);
+
+  // ---------------------------------------------------------------- dialogs with the thumb still on the stick
+  await t.start(0, 120, 300);
+  await h.frames(1);
+  const bag = await control('bag');
+  await t.start(3, bag.x, bag.y);
+  await t.end(3);
+  await h.waitFor(() => window.__game.mode === 'dialog', null, 20000).catch(() => {});
+  const closeBtn = await h.eval(() => {
+    const b = [...document.querySelectorAll('#layer button')].find((b) => b.textContent.trim() === 'Close');
+    if (!b) return null;
+    const r = b.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  if (closeBtn) {
+    await page.waitForTimeout(200);
+    await t.start(4, closeBtn.x, closeBtn.y);
+    await t.end(4);
+    await h.waitFor(() => window.__game.mode === 'playing', null, 20000).catch(() => {});
+  }
+  check('a second finger closes a dialog while the thumb rests on the stick', closeBtn && (await player()).mode === 'playing');
+  await t.end(0);
+  await h.frames(2);
+
   // ---------------------------------------------------------------- top-right menu buttons
   for (const [btn, sel, close] of [
     ['bag', '#layer .panel', 'Close'],
@@ -290,6 +320,19 @@ export default async function mobile(page, h) {
   await page.setViewportSize({ width: 844, height: 390 });
   await h.waitFor(() => window.__game.mode === 'playing', null, 20000).catch(() => {});
   check('turning it back resumes', (await player()).mode === 'playing');
+  // rotation lock on: the notice still leads to the pause menu
+  await page.setViewportSize({ width: 390, height: 844 });
+  await h.waitFor(() => window.__game.mode === 'paused', null, 20000).catch(() => {});
+  await page.waitForTimeout(300);
+  await h.tapText('Menu', '.t-rotate button');
+  await page.waitForTimeout(300);
+  const menuShown = await h.eval(() => ({ notice: getComputedStyle(document.querySelector('.t-rotate')).display, resume: [...document.querySelectorAll('#layer button')].some((b) => b.textContent.includes('Resume')) }));
+  check('the notice’s Menu button reveals the pause menu', menuShown.notice === 'none' && menuShown.resume, JSON.stringify(menuShown));
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.waitForTimeout(500);
+  check('after choosing the menu, turning back stays paused', (await player()).mode === 'paused');
+  await h.tapText('Resume');
+  await h.waitFor(() => window.__game.mode === 'playing', null, 20000).catch(() => {});
   const canvas = await h.eval(() => ({ w: window.__game.renderer.renderer.domElement.width, h: window.__game.renderer.renderer.domElement.height, pr: window.__game.renderer.renderer.getPixelRatio() }));
   check('the view is resized for landscape again', Math.abs(canvas.w / canvas.h - 844 / 390) < 0.05, JSON.stringify(canvas));
 
@@ -315,6 +358,47 @@ export default async function mobile(page, h) {
   await h.tapText('Exit');
   await h.waitFor(() => window.__game.mode === 'playing', null, 20000).catch(() => {});
   check('observer exits back to play', (await player()).mode === 'playing');
+
+  // ---------------------------------------------------------------- other phone and tablet sizes
+  for (const [w, hgt, name] of [
+    [667, 375, 'iPhone SE landscape'],
+    [740, 360, 'phone landscape with browser bars'],
+    [915, 412, 'large Android landscape'],
+    [1024, 768, 'tablet landscape'],
+  ]) {
+    await page.setViewportSize({ width: w, height: hgt });
+    await h.waitFor(() => window.__game.mode === 'playing', null, 20000).catch(() => {});
+    await h.frames(8);
+    const lay = await h.eval(() => {
+      const btns = [...document.querySelectorAll('#touch .t-btn')].filter((b) => getComputedStyle(b).display !== 'none');
+      const off = [];
+      const covered = [];
+      for (const b of btns) {
+        const r = b.getBoundingClientRect();
+        if (r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight) off.push(b.dataset.t);
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (!(hit === b || b.contains(hit))) covered.push(b.dataset.t);
+      }
+      // HUD text that a control would sit on top of
+      const overlaps = [];
+      for (const sel of ['.objectives', '.compass', '.clock', '.equip', '.bars', '.stealth', '.messages']) {
+        const el = document.querySelector(sel);
+        if (!el || !el.textContent.trim()) continue;
+        const a = el.getBoundingClientRect();
+        for (const b of btns) {
+          const r = b.getBoundingClientRect();
+          const ix = Math.min(a.right, r.right) - Math.max(a.left, r.left);
+          const iy = Math.min(a.bottom, r.bottom) - Math.max(a.top, r.top);
+          if (ix > 4 && iy > 4) overlaps.push(`${sel}/${b.dataset.t}`);
+        }
+      }
+      return { off, covered, overlaps };
+    });
+    check(`${name} (${w}x${hgt}): controls on screen, uncovered, clear of the HUD`, !lay.off.length && !lay.covered.length && !lay.overlaps.length, JSON.stringify(lay));
+    await h.shot(`m09_${w}x${hgt}`);
+  }
+  await page.setViewportSize({ width: 844, height: 390 });
+  await h.frames(4);
 
   // ---------------------------------------------------------------- health of the run
   const loopErr = await h.eval(() => window.__game.lastError);
