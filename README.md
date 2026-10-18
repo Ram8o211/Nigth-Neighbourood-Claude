@@ -23,17 +23,29 @@ bottom.
 
 **https://ram8o211.github.io/Nigth-Neighbourood-Claude/**
 
-Nothing to install: open it in a desktop browser with WebGL 2. It was tested
-in Chromium; current Chrome and Edge should behave the same, Firefox and
-Safari are expected to work but have not been tested. A dedicated or recent
-integrated GPU is recommended. Saves and settings live in the browser's local
-storage, which every `ram8o211.github.io` site shares, so the game prefixes
-its keys (`night-neighbour-beta/…`).
+Nothing to install: open it in a browser with WebGL 2. It was tested in
+Chromium; current Chrome and Edge should behave the same, Firefox and Safari
+are expected to work but have not been tested on real devices. A dedicated or
+recent integrated GPU is recommended on a computer. Saves and settings live in
+the browser's local storage, which every `ram8o211.github.io` site shares, so
+the game prefixes its keys (`night-neighbour-beta/…`).
+
+**On a phone or tablet** the game shows on-screen controls by itself: drag on
+the left to walk, drag on the right to look, and use the buttons for USE, HIT,
+BLOCK, DODGE, CROUCH, LIGHT and WEAPON, with the bag, journal, map, wait and
+pause at the top right. Play with the phone sideways. Phones start on the
+*low* graphics preset. Android Chrome goes full screen when a game starts; on
+an iPhone, *Share → Add to Home Screen* opens it as a full-screen app (note
+that iOS keeps a home-screen app's saves separate from Safari's). The touch
+controls were tested in an emulated phone (Chromium, touch events), not on
+real devices; iOS Safari needs iOS 16.4 or later. See
+[docs/GAMEPLAY.md](docs/GAMEPLAY.md#touch-screens-phones-and-tablets).
 
 Every push to `main` runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml):
 type-check, unit and simulation tests, production build, publishing the build
-to the `gh-pages` branch that Pages serves, and then the browser smoke test
-played against the live site once it serves that exact build (screenshots and
+to the `gh-pages` branch that Pages serves, and then the browser smoke tests
+(desktop with keyboard and mouse, and an emulated phone with touch) played
+against the live site once it serves that exact build (screenshots and
 results are attached to the run as the `smoke-test-screenshots` artifact). It
 can also be started by hand from the *Actions* tab.
 
@@ -160,7 +172,7 @@ and during sleep fast-forward. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 ```bash
 npm run typecheck    # TypeScript, strict
 npm test             # Vitest: world generation, simulation, story, saves, inventory, multi-night runs
-npm run test:e2e     # builds, serves and drives the real game in headless Chromium
+npm run test:e2e     # builds, serves and drives the real game in headless Chromium (desktop + phone)
 ```
 
 Developer tools: `node scripts/run.mjs scripts/soak.ts <seed> <hours>` prints

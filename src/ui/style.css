@@ -956,15 +956,15 @@ table.list th {
   bottom: calc(172px + var(--sab));
   font-size: 10px;
 }
-/* observer: climb and descend */
+/* observer: climb and descend, left of the inspector panel */
 #touch .t-up {
   --s: 60px;
-  right: calc(20px + var(--sar));
+  right: calc(min(360px, 42vw) + 16px);
   bottom: calc(94px + var(--sab));
 }
 #touch .t-down {
   --s: 60px;
-  right: calc(20px + var(--sar));
+  right: calc(min(360px, 42vw) + 16px);
   bottom: calc(20px + var(--sab));
 }
 /* menu buttons, top right */

@@ -35,10 +35,31 @@ export default async function mobile(page, h) {
       return { bad, wide: document.documentElement.scrollWidth > innerWidth + 1 };
     }, sel);
   const t = await Touch.create(page);
+  /** wait until an on-screen control is shown (the layer follows the game mode on the next frame) */
+  const control = async (name) => {
+    await h.waitFor((sel) => {
+      const el = document.querySelector(sel);
+      return !!el && el.getBoundingClientRect().width > 0;
+    }, `#touch .t-${name}`, 20000).catch(() => {});
+    const c = await centerOf(page, `#touch .t-${name}`);
+    if (!c) throw new Error(`touch control ${name} is not shown`);
+    return c;
+  };
+  /** the controls a finger would actually hit: shown, and not covered by another element */
+  const reachable = () =>
+    h.eval(() =>
+      [...document.querySelectorAll('#touch .t-btn')]
+        .filter((b) => getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().width > 0)
+        .filter((b) => {
+          const r = b.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return hit === b || b.contains(hit);
+        })
+        .map((b) => b.dataset.t),
+    );
   /** tap an on-screen game control (acts on touch-down, like a finger) */
   const tapControl = async (name, holdFrames = 1) => {
-    const c = await centerOf(page, `#touch .t-${name}`);
-    if (!c) return false;
+    const c = await control(name);
     await t.start(5, c.x, c.y);
     await h.frames(holdFrames);
     await t.end(5);
@@ -93,15 +114,16 @@ export default async function mobile(page, h) {
   await h.tapText('Begin');
   await h.waitFor(() => window.__game && window.__game.mode === 'playing', null, 180000);
   await h.frames(4);
+  await control('use');
   const hud = await h.eval(() => ({
     lock: !!document.pointerLockElement,
     touchShown: getComputedStyle(document.querySelector('#touch')).display !== 'none',
-    buttons: [...document.querySelectorAll('#touch .t-btn')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.t),
     hint: getComputedStyle(document.querySelector('.click-hint')).display,
     msgs: document.querySelector('.messages').innerText,
   }));
   check('game starts without pointer lock', !hud.lock);
-  check('touch controls are shown in play', hud.touchShown && ['use', 'attack', 'block', 'dodge', 'crouch', 'light', 'weapon', 'pause', 'bag', 'journal', 'map', 'wait'].every((b) => hud.buttons.includes(b)), hud.buttons.join(','));
+  hud.buttons = await reachable();
+  check('touch controls are shown in play, none covered', hud.touchShown && ['use', 'attack', 'block', 'dodge', 'crouch', 'light', 'weapon', 'pause', 'bag', 'journal', 'map', 'wait'].every((b) => hud.buttons.includes(b)), hud.buttons.join(','));
   check('no "click to look" hint on touch', hud.hint === 'none');
   check('arrival message names the touch controls', /thumb/i.test(hud.msgs), hud.msgs.slice(0, 120));
   f = await fits('#touch .t-btn');
@@ -183,7 +205,7 @@ export default async function mobile(page, h) {
   check('CROUCH crouches', b.crouching);
   await tapControl('crouch');
   check('CROUCH again stands up', !(await player()).crouching);
-  const bc = await centerOf(page, '#touch .t-block');
+  const bc = await control('block');
   await t.start(6, bc.x, bc.y);
   await h.frames(3);
   b = await player();
@@ -222,7 +244,7 @@ export default async function mobile(page, h) {
     await h.frames(1);
     // thumb resting on the stick (no movement) while the other finger hits
     await t.start(0, 120, 300);
-    const hc = await centerOf(page, '#touch .t-attack');
+    const hc = await control('attack');
     await t.start(7, hc.x, hc.y);
     await h.frames(1);
     await t.end(7);
@@ -276,8 +298,9 @@ export default async function mobile(page, h) {
   await h.frames(2);
   await h.tapText('Observer Mode');
   await h.waitFor(() => window.__game.mode === 'observer', null, 30000).catch(() => {});
-  const obsButtons = await h.eval(() => [...document.querySelectorAll('#touch .t-btn')].filter((b) => getComputedStyle(b).display !== 'none').map((b) => b.dataset.t));
-  check('observer shows its own touch controls', obsButtons.includes('up') && obsButtons.includes('down') && !obsButtons.includes('use'), obsButtons.join(','));
+  await control('up').catch(() => {});
+  const obsButtons = await reachable();
+  check('observer shows its own touch controls, none covered by the panel', obsButtons.includes('up') && obsButtons.includes('down') && !obsButtons.includes('use'), obsButtons.join(','));
   const o0 = await h.eval(() => window.__game.observer.pos.toArray());
   await t.drag(0, 120, 300, 0, -50, 3, async () => {
     await h.frames(1);
