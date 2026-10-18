@@ -2,6 +2,7 @@
 import { chromium } from 'playwright-core';
 import { existsSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { PHONE_LANDSCAPE } from './touch.mjs';
 
 const CANDIDATES = [process.env.NN_CHROME, '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', '/opt/pw-browsers/chromium'];
 
@@ -10,7 +11,7 @@ export function chromePath() {
   return undefined; // let playwright find its own
 }
 
-export async function launch({ base, outDir, width = 1280, height = 720 }) {
+export async function launch({ base, outDir, width = 1280, height = 720, mobile = false }) {
   mkdirSync(outDir, { recursive: true });
   // no autoplay override: audio must start from the real click on "Begin", as for players.
   // Local servers bypass any HTTP proxy; a deployed site (NN_URL) uses the machine's proxy settings.
@@ -24,7 +25,9 @@ export async function launch({ base, outDir, width = 1280, height = 720 }) {
     channel: exe ? undefined : 'chromium',
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', ...(local ? ['--no-proxy-server'] : [])],
   });
-  const page = await browser.newPage({ viewport: { width, height } });
+  // a phone: touch screen, mobile viewport, no mouse
+  const context = await browser.newContext(mobile ? PHONE_LANDSCAPE : { viewport: { width, height } });
+  const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e.stack || e)));
   // any failed request for the game's own files (a broken asset path on GitHub Pages, say) is an error
@@ -57,11 +60,16 @@ export async function launch({ base, outDir, width = 1280, height = 720 }) {
       console.log('  screenshot', p);
       return p;
     },
+    // only visible buttons: the touch controls (hidden on desktop) also say MAP, JOURNAL, WAIT...
     async clickText(text, sel = 'button') {
-      await page.locator(sel, { hasText: text }).first().click({ timeout: 15000 });
+      await page.locator(sel, { hasText: text }).filter({ visible: true }).first().click({ timeout: 15000 });
+    },
+    /** a finger tap (touch pointer events, then click) */
+    async tapText(text, sel = 'button') {
+      await page.locator(sel, { hasText: text }).filter({ visible: true }).first().tap({ timeout: 15000 });
     },
     async hasText(text, sel = 'button') {
-      return (await page.locator(sel, { hasText: text }).count()) > 0;
+      return (await page.locator(sel, { hasText: text }).filter({ visible: true }).count()) > 0;
     },
     async hold(key, ms) {
       await page.keyboard.down(key);

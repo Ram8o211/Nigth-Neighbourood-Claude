@@ -2,14 +2,82 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <link rel="icon" href="data:," />
     <title>Night Neighbour</title>
     <meta name="description" content="Night Neighbour - a first-person procedural neighbourhood horror simulation." />
+    <meta name="theme-color" content="#0b0b0e" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Night Neighbour" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <style>
+      /* before the game's stylesheet arrives: dark, never a blank white page */
+      html,
+      body {
+        background: #0b0b0e;
+        color: #e4ddcc;
+      }
+      .boot-error {
+        position: fixed;
+        inset: 0;
+        z-index: 99;
+        overflow: auto;
+        padding: 28px;
+        font: 17px/1.5 Georgia, 'Times New Roman', serif;
+        background: #0b0b0e;
+        color: #e4ddcc;
+      }
+      .boot-error h1 {
+        font-weight: normal;
+        font-size: 24px;
+      }
+      .boot-error .why {
+        color: #e08a6a;
+        word-break: break-word;
+      }
+    </style>
+    <script>
+      // If the game cannot start (browser too old for the bundle, a file failed to download, a script
+      // error before start-up), say so instead of leaving an empty page.
+      (function () {
+        if (/[?&]viewer\b/.test(location.search)) return;
+        var box = null;
+        function show(why) {
+          if (box || window.__game || window.__bootFailed) return;
+          box = document.createElement('div');
+          box.className = 'boot-error';
+          box.innerHTML =
+            '<h1>Night Neighbour could not start</h1><p class="why"></p><p>It needs a recent browser with WebGL 2: current Chrome, Edge, Firefox or Samsung Internet, or Safari on iOS 16.4 or later. Reloading the page often helps after an update.</p><p><button onclick="location.reload()">Reload</button></p>';
+          box.querySelector('.why').textContent = why;
+          document.body.appendChild(box);
+        }
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e.target;
+            if (t && t !== window && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) show('A game file failed to load: ' + (t.src || t.href));
+            else if ((e.error && e.error.name === 'SyntaxError') || /SyntaxError/.test(e.message || '')) show('This browser cannot run the game code (' + e.message + ').');
+          },
+          true,
+        );
+        var waited = 0;
+        var timer = setInterval(function () {
+          waited++;
+          if (window.__game) {
+            clearInterval(timer);
+            if (box) box.remove();
+          } else if (waited === 45) show('The game has not started after 45 seconds.');
+        }, 1000);
+      })();
+    </script>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="ui"></div>
+    <noscript><div class="boot-error"><h1>Night Neighbour needs JavaScript</h1><p>Turn JavaScript on for this site and reload.</p></div></noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

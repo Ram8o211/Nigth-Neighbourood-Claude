@@ -154,6 +154,37 @@ describe('save files', () => {
     localStorage.removeItem(KEY);
   });
 
+  it('picks the graphics preset by device until the player chooses one', () => {
+    const KEY = 'night-neighbour-beta/settings.v1';
+    const g = globalThis as unknown as { matchMedia?: unknown; screen?: unknown };
+    const saved = { matchMedia: g.matchMedia, screen: g.screen };
+    // a landscape phone
+    g.matchMedia = (q: string) => ({ matches: q === '(pointer: coarse)' });
+    g.screen = { width: 844, height: 390 };
+    try {
+      localStorage.removeItem(KEY);
+      expect(loadSettings().quality).toBe('low');
+      // saved before the setting existed, with the old default: still automatic
+      localStorage.setItem(KEY, JSON.stringify({ quality: 'medium' }));
+      expect(loadSettings().quality).toBe('low');
+      // a preset the player picked is kept
+      localStorage.setItem(KEY, JSON.stringify({ quality: 'high' }));
+      expect(loadSettings()).toMatchObject({ quality: 'high', graphicsAuto: false });
+      localStorage.setItem(KEY, JSON.stringify({ quality: 'high', graphicsAuto: true }));
+      expect(loadSettings().quality).toBe('low');
+      localStorage.setItem(KEY, JSON.stringify({ touchControls: 'sometimes' }));
+      expect(loadSettings().touchControls).toBe('auto');
+      localStorage.setItem(KEY, JSON.stringify({ touchControls: 'off' }));
+      expect(loadSettings().touchControls).toBe('off');
+    } finally {
+      g.matchMedia = saved.matchMedia;
+      g.screen = saved.screen;
+      localStorage.removeItem(KEY);
+    }
+    // a desktop keeps 'medium'
+    expect(loadSettings().quality).toBe('medium');
+  });
+
   it('reports corrupt and empty slots without throwing', () => {
     expect(readSave('slot2').error).toMatch(/Empty/);
     localStorage.setItem('night-neighbour-beta/save.slot3', '{not json');

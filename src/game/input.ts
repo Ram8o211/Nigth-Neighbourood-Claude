@@ -1,4 +1,5 @@
-// Keyboard / mouse input with pointer lock and rebindable actions.
+// Keyboard / mouse input with pointer lock and rebindable actions, plus the state
+// the on-screen touch controls feed (src/ui/touch.ts).
 
 export type Action =
   | 'forward'
@@ -51,6 +52,13 @@ export const DEFAULT_BINDINGS: Record<Action, string> = {
   wait: 'KeyT',
 };
 
+export type TouchSetting = 'auto' | 'on' | 'off';
+
+/** a phone or tablet: the primary pointer is a finger */
+export function touchPrimary() {
+  return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+}
+
 export class Input {
   bindings: Record<Action, string> = { ...DEFAULT_BINDINGS };
   private down = new Set<string>();
@@ -69,9 +77,24 @@ export class Input {
   enabled = true;
   /** set while a text field / rebind capture wants raw keys */
   capture: ((code: string) => void) | null = null;
+  /** on-screen touch controls are in use (no pointer lock; buttons stand in for keys and mouse) */
+  touchMode = false;
+  touchSetting: TouchSetting = 'auto';
+  /** analog movement from the touch stick: x right, y back (forward is negative), length <= 1 */
+  moveX = 0;
+  moveY = 0;
+  /** the touch stick is pushed past its rim */
+  stickSprint = false;
+  /** called when touchMode changes, and when held touch state must be dropped */
+  onTouchMode: ((on: boolean) => void) | null = null;
+  onReset: (() => void) | null = null;
+  private lastPointer: '' | 'mouse' | 'touch' = '';
+  private lastTouchAt = -1e9;
 
   constructor(private el: HTMLElement) {
     window.addEventListener('keydown', (e) => {
+      // typing in a text field (the world seed) is not a game key
+      if (!this.capture && (isTextField(e.target) || e.isComposing)) return;
       if (this.capture) {
         e.preventDefault();
         const c = this.capture;
@@ -86,11 +109,27 @@ export class Input {
     window.addEventListener('keyup', (e) => {
       this.down.delete(e.code);
     });
-    window.addEventListener('blur', () => {
-      this.down.clear();
-      this.lmb = this.rmb = false;
+    window.addEventListener('blur', () => this.reset());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.reset();
     });
+    // which kind of pointer the player is using decides whether the touch controls show
+    window.addEventListener(
+      'pointerdown',
+      (e) => {
+        // a pen can stand in for either (a desktop tablet or an iPad pencil): it does not switch
+        if (e.pointerType === 'mouse') this.lastPointer = 'mouse';
+        else if (e.pointerType === 'touch') {
+          this.lastPointer = 'touch';
+          this.lastTouchAt = performance.now();
+        } else return;
+        this.updateTouchMode();
+      },
+      true,
+    );
     el.addEventListener('mousedown', (e) => {
+      // browsers follow a tap with emulated mouse events; those are not clicks
+      if (this.touchMode || performance.now() - this.lastTouchAt < 800) return;
       if (e.button === 0) {
         this.lmb = true;
         this.lmbPressed = true;
@@ -122,9 +161,49 @@ export class Input {
       this.locked = document.pointerLockElement === this.el;
       this.skipMove = this.locked;
     });
+    this.updateTouchMode();
+  }
+
+  /** look and attack input is live: the pointer is captured, or the touch controls are up */
+  get active() {
+    return this.locked || this.touchMode;
+  }
+
+  setTouchSetting(t: TouchSetting) {
+    this.touchSetting = t;
+    this.updateTouchMode();
+  }
+
+  private updateTouchMode() {
+    const t = this.touchSetting;
+    const on = t === 'on' || (t === 'auto' && (this.lastPointer ? this.lastPointer === 'touch' : touchPrimary()));
+    if (on === this.touchMode) return;
+    this.touchMode = on;
+    if (on) this.unlock();
+    this.reset();
+    this.onTouchMode?.(on);
+  }
+
+  /** drop every held key, button and stick (focus lost, page hidden, controls hidden) */
+  reset() {
+    this.down.clear();
+    this.lmb = this.rmb = false;
+    this.moveX = this.moveY = 0;
+    this.stickSprint = false;
+    this.onReset?.();
+  }
+
+  /** press an action as if its key went down (touch buttons); hold keeps it down until released */
+  pressAction(a: Action, hold = false) {
+    this.press(this.bindings[a], hold);
+  }
+  releaseAction(a: Action) {
+    this.release(this.bindings[a]);
   }
 
   lock() {
+    // phones have no pointer lock, and taking it would hide where the fingers are
+    if (this.touchMode) return;
     if (document.pointerLockElement !== this.el) {
       try {
         const p = this.el.requestPointerLock() as unknown as Promise<void> | undefined;
@@ -153,9 +232,9 @@ export class Input {
     return this.pressed.has(this.bindings[a]);
   }
 
-  /** inject a synthetic press (used by automated tests) */
+  /** inject a synthetic press (touch buttons and automated tests) */
   press(code: string, hold = false) {
-    this.pressed.add(code);
+    if (!this.down.has(code)) this.pressed.add(code);
     if (hold) this.down.add(code);
   }
   release(code: string) {
@@ -174,4 +253,11 @@ export class Input {
     const c = this.bindings[a];
     return c.replace('Key', '').replace('Digit', '').replace('Left', '').replace('Right', '');
   }
+}
+
+/** an element that takes typed text (sliders, checkboxes and selects still let game keys like Esc through) */
+function isTextField(t: EventTarget | null) {
+  if (!(t instanceof HTMLElement)) return false;
+  if (t.tagName === 'TEXTAREA' || t.isContentEditable) return true;
+  return t instanceof HTMLInputElement && ['text', 'search', 'number', 'email', 'url', 'password', 'tel'].includes(t.type);
 }

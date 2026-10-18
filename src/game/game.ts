@@ -8,12 +8,12 @@ import { buildRig, animateRig, dressRig, type Rig } from '../render/characters';
 import { Effects } from '../render/effects';
 import { AudioEngine } from '../audio/audio';
 import type { MusicState } from '../audio/music';
-import { Input } from './input';
+import { Input, touchPrimary } from './input';
 import { PlayerController } from './player';
 import { Journal } from './journal';
 import { Story } from './story';
-import { loadSettings, saveSettings, type Settings } from './settings';
-import { writeSave, readSave, type SaveGame, SAVE_VERSION } from './save';
+import { deviceQuality, loadSettings, saveSettings, type Settings } from './settings';
+import { writeSave, readSave, deleteSave, type SaveGame, SAVE_VERSION } from './save';
 import { WORLD_VERSION } from '../world/gen/generator';
 import { SIM_VERSION } from '../sim/simulation';
 import { CFG, isDark } from '../sim/config';
@@ -66,6 +66,9 @@ export class Game {
   /** fast-forward: target game time and speed multiplier */
   ff: { until: number; speed: number; reason: 'sleep' | 'wait' | 'custody'; interrupted: boolean } | null = null;
   private last = performance.now();
+  /** touch frame cap: time owed to the next frame, and when the loop last ran */
+  private frameBudget = 0;
+  private lastTick = performance.now();
   private fpsAcc = 0;
   private fpsN = 0;
   fps = 0;
@@ -84,10 +87,18 @@ export class Game {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.settings = loadSettings();
-    this.renderer = new GameRenderer(canvas);
+    this.renderer = new GameRenderer(canvas, touchPrimary());
     this.input = new Input(canvas);
     this.applySettings();
-    window.addEventListener('resize', () => this.renderer.resize());
+    // phones report the rotated size late: resize again on the next frame
+    const resize = () => {
+      this.renderer.resize();
+      requestAnimationFrame(() => this.renderer.resize());
+    };
+    window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', resize);
+    window.visualViewport?.addEventListener('resize', resize);
+    document.addEventListener('fullscreenchange', resize);
     canvas.addEventListener('click', () => {
       if (this.mode === 'playing' || this.mode === 'observer') this.input.lock();
     });
@@ -96,8 +107,71 @@ export class Game {
       if (!document.pointerLockElement && this.mode === 'playing' && !this.ff) this.pause();
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.mode === 'playing') this.pause();
+      if (document.hidden) {
+        if (this.mode === 'playing') this.pause();
+        // phones often discard background tabs: keep the progress
+        this.saveOnLeave();
+        this.audio.suspend();
+      } else if (this.mode !== 'paused') this.audio.resume();
     });
+    window.addEventListener('pagehide', () => this.saveOnLeave());
+    // iOS interrupts audio for calls and alarms; a later touch may wake it again
+    document.addEventListener('pointerup', () => {
+      if (this.mode !== 'paused') this.audio.wake();
+    });
+    // the phone's Back gesture pauses instead of leaving the game
+    window.addEventListener('popstate', () => {
+      if (!this.sim || this.mode === 'menu' || this.mode === 'loading') return;
+      if (this.mode === 'playing') this.pause();
+      history.pushState({ nn: 1 }, '');
+    });
+    // mobile browsers drop the WebGL context under memory pressure; three.js restores it
+    canvas.addEventListener('webglcontextlost', () => {
+      if (this.mode === 'playing') this.pause();
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.renderer.setQuality(this.settings.quality);
+      this.renderer.resize();
+    });
+  }
+
+  /**
+   * When the page is hidden or closed (phones often discard background tabs), keep the game in its own
+   * 'suspend' slot: Continue resumes it, while the morning checkpoint 'auto' that the death screen
+   * offers stays untouched. Not during an arrest, a sleep or custody fast-forward, or after the end.
+   */
+  private saveOnLeave() {
+    const live = this.mode === 'playing' || this.mode === 'dialog' || this.mode === 'paused';
+    if (!live || !this.story || this.story.flags.observerOnly || this.arrestOfficer >= 0 || this.ff || !this.sim?.player.alive) return;
+    this.saveTo('suspend', `Where you left off — ${this.sim.world.townName}, day ${this.sim.day() + 1}, ${formatClock(this.sim.time)}`);
+  }
+
+  /**
+   * Called synchronously from the tap/click that starts or continues a game: browsers only allow
+   * audio and full screen from inside a user gesture. Phones go full screen and keep Back inside the game.
+   */
+  beginGesture() {
+    this.audio.unlock();
+    if (!this.input.touchMode) return;
+    if (document.fullscreenEnabled && !document.fullscreenElement) this.enterFullscreen();
+    if (!history.state?.nn) history.pushState({ nn: 1 }, '');
+  }
+
+  enterFullscreen() {
+    const done = document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
+    done
+      ?.then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape'))
+      .catch(() => {
+        /* refused, or orientation lock unsupported */
+      });
+  }
+
+  toggleFullscreen(after: () => void) {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {}).then(after);
+    else {
+      this.enterFullscreen();
+      setTimeout(after, 300);
+    }
   }
 
   attachUI(ui: UI) {
@@ -106,12 +180,14 @@ export class Game {
 
   applySettings() {
     const s = this.settings;
+    if (s.graphicsAuto) s.quality = deviceQuality();
     this.renderer.setQuality(s.quality);
     this.renderer.brightness = s.brightness;
     this.renderer.postEnabled = s.post;
     this.input.sensitivity = s.sensitivity;
     this.input.invertY = s.invertY;
     this.input.bindings = { ...s.bindings };
+    this.input.setTouchSetting(s.touchControls);
     this.audio.volumes = { master: s.master, music: s.music, sfx: s.sfx, ambience: s.ambience };
     this.audio.hrtf = s.hrtf;
     this.audio.applyVolumes();
@@ -222,7 +298,7 @@ export class Game {
         this.mode = 'playing';
         this.ui.hideAll();
         this.ui.banner(world.townName, `Day 1 — ${formatClock(sim.time)}`);
-        this.ui.message('Your uncle’s house is waiting. Follow the marker on the compass. [Click to look around]');
+        this.ui.message(`Your uncle’s house is waiting. Follow the marker on the compass. ${this.input.touchMode ? '[Left thumb: walk. Right side: look]' : '[Click to look around]'}`);
         this.queueTips();
         this.input.lock();
         this.audio.music?.setState('day');
@@ -261,6 +337,8 @@ export class Game {
   saveTo(slot: string, label?: string): string | null {
     const sim = this.sim;
     if (!sim || !this.journal || !this.story || this.story.ending) return 'Nothing to save.';
+    // a save taken in the cells would wake up locked in with no way out
+    if (sim.player.inCustody || this.ff?.reason === 'custody') return 'You cannot save while in custody.';
     const save: SaveGame = {
       saveVersion: SAVE_VERSION,
       worldVersion: WORLD_VERSION,
@@ -375,6 +453,17 @@ export class Game {
 
   private frame() {
     const now = performance.now();
+    if (this.input.touchMode) {
+      // phones: about 60 fps on 90/120/144 Hz screens (a frame budget, so 90 Hz alternates one and two
+      // refreshes), and slow redraws behind the pause and ending screens
+      const gap = now - this.last;
+      if ((this.mode === 'paused' || this.mode === 'ending') && gap < 100) return;
+      this.frameBudget = Math.min(this.frameBudget + now - this.lastTick, 1000 / 30);
+      this.lastTick = now;
+      if (this.frameBudget < 1000 / 60 - 1) return;
+      this.frameBudget -= 1000 / 60;
+    }
+    this.ui?.touch.update();
     const pf = this.perf;
     const real = now - this.last;
     pf.interval += (real - pf.interval) * 0.1;
@@ -426,6 +515,8 @@ export class Game {
       this.autosave();
       this.showTips();
       if (this.story.ending && !this.ui.endingShown) {
+        // the finished game must not come back through Continue
+        deleteSave('suspend');
         this.mode = 'ending';
         this.input.unlock();
         this.ui.showEnding(this.story.ending);
@@ -553,6 +644,15 @@ export class Game {
   private queueTips() {
     const k = (a: Parameters<Input['keyName']>[0]) => this.input.keyName(a);
     const t0 = this.time;
+    if (this.input.touchMode) {
+      this.tips = [
+        { at: t0 + 5, text: 'Drag with your left thumb to walk (past the ring to sprint) and on the right to look.' },
+        { at: t0 + 14, text: 'USE interacts with doors, people and things. Hold it for more (lock doors, pick locks...).' },
+        { at: t0 + 24, text: 'BAG, JOURNAL, MAP and WAIT are at the top right; ❚❚ pauses and saves.' },
+        { at: t0 + 36, text: 'The clock is ticking. Night falls around 19:30. Find a flashlight before then.' },
+      ];
+      return;
+    }
     this.tips = [
       { at: t0 + 5, text: `Move with ${k('forward')}${k('left')}${k('back')}${k('right')} and the mouse. ${k('sprint')} sprints, ${k('crouch')} crouches.` },
       { at: t0 + 14, text: `${k('interact')} interacts with doors, people and things. Hold ${k('interact')} for more (lock doors, pick locks...).` },
@@ -566,6 +666,8 @@ export class Game {
 
   private autosave() {
     const sim = this.sim!;
+    // in the cells the morning save waits for the release
+    if (sim.player.inCustody || this.ff?.reason === 'custody') return;
     if (sim.day() !== this.autosaveDay && sim.hour() > 7 && sim.hour() < 9 && sim.player.alive) {
       this.autosaveDay = sim.day();
       this.autosaveNow();
@@ -672,7 +774,7 @@ export class Game {
       const rig = this.rigs.get(n.id);
       if (!rig) continue;
       const d = Math.hypot(n.x - cam.x, n.z - cam.z);
-      const vis = d < 75 && !(n.bodyRemoved && !n.alive) && n.stance !== 'hidden';
+      const vis = d < (this.renderer.mobile ? 55 : 75) && !(n.bodyRemoved && !n.alive) && n.stance !== 'hidden';
       rig.root.visible = vis;
       if (!vis) continue;
       rig.root.position.set(n.x, n.y, n.z);

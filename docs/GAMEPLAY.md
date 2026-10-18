@@ -135,6 +135,28 @@ All keys can be rebound in *Settings → Controls*.
 | Esc | Pause menu (save, load, settings, observer, quit) |
 | F2 | Observer mode |
 
+### Touch screens (phones and tablets)
+
+The on-screen controls appear by themselves as soon as you play with a
+finger (*Settings → Controls → Touch controls*: Automatic, Always on or Off).
+Hold the phone sideways; turning it upright pauses the game.
+
+| Control | Action |
+| --- | --- |
+| Left side of the screen | Put a thumb down anywhere and drag to walk (a light push walks slowly). Drag past the ring to sprint |
+| Right side of the screen | Drag to look around |
+| USE | Interact. **Hold** for the alternatives listed above. Prompts read *[Use]* and *[Hold Use]* |
+| HIT / BLOCK | Attack / hold to block |
+| DODGE / CROUCH | Dodge / crouch and sneak (toggle) |
+| LIGHT / WEAPON | Flashlight / next weapon (after the last weapon: bare hands) |
+| WAIT, MAP, JOURNAL, BAG | Top right: wait, map, journal, inventory |
+| ❚❚ | Pause menu (save, load, settings, full screen, observer, quit) |
+
+Starting or continuing a game goes full screen where the browser allows it
+(Android; not iPhone Safari, where *Share → Add to Home Screen* gives a
+full-screen app instead). The phone's Back gesture pauses instead of leaving.
+In observer mode the stick flies the camera and UP/DOWN climb and descend.
+
 ## Observer mode
 
 Available from the main menu (a town without the player) and from the pause
@@ -148,9 +170,10 @@ so observer mode spoils the mystery.
 
 ## Settings
 
-Graphics quality (low/medium/high: resolution scale, sun and flashlight
-shadows and their resolution, number of real-time point lights, texture
-filtering, anti-aliasing), post-processing, brightness, field of view, head
-bob, mouse sensitivity and invert, master/music/effects/ambience volume, HRTF
-spatial audio, FPS counter, and key bindings. Settings are stored in the
-browser.
+Graphics quality (automatic, low, medium, high: resolution scale, sun and
+flashlight shadows and their resolution, number of real-time point lights,
+texture filtering, anti-aliasing; *automatic* picks low on phones and small
+tablets and medium elsewhere), post-processing, brightness, field of view,
+head bob, look sensitivity and invert, touch controls, master/music/effects/
+ambience volume, HRTF spatial audio, FPS counter, and key bindings (hidden
+while the touch controls are in use). Settings are stored in the browser.
