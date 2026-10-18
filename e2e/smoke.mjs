@@ -142,6 +142,8 @@ export default async function smoke(page, h) {
       await h.frames(2);
       s = await state();
       check('letter closed, back to play', s.mode === 'playing', s.mode);
+      // the HUD redraws its objective list every few frames
+      await h.waitFor(() => !/Read the letter/.test(document.querySelector('.objectives')?.textContent ?? ''), undefined, 60000).catch(() => {});
       const objs = await page.locator('.objectives').innerText();
       check('objectives advanced after the letter', !objs.includes('Read the letter'), objs.replace(/\n/g, ' | '));
     } else check('free spot near letter', false);
@@ -267,7 +269,8 @@ export default async function smoke(page, h) {
       const after = await h.eval(() => ({ money: window.__game.sim.player.money, has: window.__game.sim.player.inventory.some((i) => i.item === 'flashlight') }));
       check('buying the flashlight takes the money and adds it to the inventory', after.has && after.money === money0 - 18, `$${money0} -> $${after.money}`);
       await h.clickText('Done');
-      await h.frames(3);
+      // the HUD redraws its objective list every few frames
+      await h.waitFor(() => !/Buy a flashlight/.test(document.querySelector('.objectives')?.textContent ?? ''), undefined, 60000).catch(() => {});
       const objs = await page.locator('.objectives').innerText();
       check('the flashlight objective is done', !/Buy a flashlight/.test(objs), objs.replace(/\n/g, ' | '));
       await h.tap('KeyF');

@@ -222,6 +222,10 @@ the game on real hardware (the FPS counter is in *Settings → Graphics*).
   that arrived while the arrest dialog was open blocked every later arrest
   until the page was reloaded. Both are fixed (the first covered by
   `tests/player.test.ts`).
+* Two smoke-test checks read the HUD's objective list two or three frames
+  after closing a dialog, but the HUD redraws it only every six frames, so
+  they passed or failed by chance (one failed once). They now wait for the
+  HUD to refresh.
 * The crowbar's description promised prying doors and windows open, which was
   not implemented; cigarettes were sold but had no use (now: offer one to a
   smoker for rumours).
