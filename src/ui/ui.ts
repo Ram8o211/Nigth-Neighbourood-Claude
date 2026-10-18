@@ -9,7 +9,8 @@ import { formatClock, wrapAngle, clamp } from '../core/math';
 import { listSaves, deleteSave, SLOTS } from '../game/save';
 import { DEFAULT_BINDINGS, type Action } from '../game/input';
 import { ATTR_LABEL } from '../game/journal';
-import { DEFAULT_SETTINGS, KEY_CODE } from '../game/settings';
+import { defaultSettings, deviceQuality, KEY_CODE } from '../game/settings';
+import { TouchControls } from './touch';
 import { memoryLine } from '../sim/memory';
 import * as THREE from 'three';
 
@@ -58,6 +59,7 @@ export class UI {
   private dialogKind = '';
   /** result of the last save, shown on the next saves screen */
   private saveNotice = '';
+  readonly touch: TouchControls;
 
   constructor(private game: Game) {
     this.root = document.getElementById('ui')!;
@@ -68,6 +70,21 @@ export class UI {
     this.root.append(this.hud, this.fadeEl, this.bannerEl, this.layer);
     this.buildHud();
     this.hud.style.display = 'none';
+    this.touch = new TouchControls(game, this.root, this.fadeEl);
+    const touchClass = (on: boolean) => document.body.classList.toggle('touch', on);
+    game.input.onTouchMode = (on) => {
+      touchClass(on);
+      // menus word their hints for the input in use
+      if (game.mode === 'menu') this.showMainMenu();
+    };
+    touchClass(game.input.touchMode);
+  }
+
+  /** prompts and messages are written with [E]; show the player's own key, or the touch button */
+  controlText(text: string) {
+    const inp = this.game.input;
+    const k = inp.touchMode ? 'Use' : inp.keyName('interact');
+    return text.replace(/\[Hold E\]/g, `[Hold ${k}]`).replace(/\[E\]/g, `[${k}]`).replace(/\bhold E\b/g, `hold ${k}`);
   }
 
   // ------------------------------------------------------------------ helpers
@@ -99,10 +116,11 @@ export class UI {
   message(text: string, kind: 'info' | 'warn' | 'good' | 'event' = 'info') {
     const box = this.hudEls.messages;
     if (!box) return;
-    const el = h('div', { class: kind }, text);
+    const el = h('div', { class: kind }, this.controlText(text));
     box.append(el);
     this.messages.push({ el, t: performance.now() });
-    while (this.messages.length > 6) this.messages.shift()!.el.remove();
+    // a phone screen has room for fewer lines
+    while (this.messages.length > (this.game.input.touchMode ? 4 : 6)) this.messages.shift()!.el.remove();
   }
 
   banner(title: string, sub = '') {
@@ -160,6 +178,7 @@ export class UI {
   }
 
   private load(slot: string) {
+    this.game.beginGesture();
     this.showLoading('Restoring your game...');
     setTimeout(async () => {
       await this.game.ensureAudio();
@@ -169,14 +188,20 @@ export class UI {
   }
 
   showNewGame(observer = false) {
-    const seedIn = h('input', { value: randomSeed(), style: 'width:180px' }) as HTMLInputElement;
+    // seeds are case-sensitive: no automatic capitals or corrections from phone keyboards
+    const seedIn = h('input', { value: randomSeed(), style: 'width:min(180px,100%)', autocapitalize: 'off', autocorrect: 'off', autocomplete: 'off', spellcheck: 'false', enterkeyhint: 'go' }) as HTMLInputElement;
     const size = h('select', {}, h('option', { value: 'small' }, 'Small (quick)'), h('option', { value: 'medium', selected: 'selected' }, 'Medium'), h('option', { value: 'large' }, 'Large')) as HTMLSelectElement;
     size.value = 'medium';
     const dens = h('select', {}, h('option', { value: '0.5' }, 'Sparse'), h('option', { value: '0.7' }, 'Normal'), h('option', { value: '0.9' }, 'Crowded')) as HTMLSelectElement;
     dens.value = '0.7';
     const nights = h('select', {}, h('option', { value: '3' }, '3 nights (short)'), h('option', { value: '5' }, '5 nights'), h('option', { value: '7' }, '7 nights (long)')) as HTMLSelectElement;
     nights.value = '5';
+    let started = false;
     const start = async () => {
+      if (started) return;
+      started = true;
+      seedIn.blur();
+      this.game.beginGesture();
       const params: GenParams = { seed: seedIn.value.trim() || randomSeed(), size: size.value as GenParams['size'], density: parseFloat(dens.value), nights: parseInt(nights.value, 10) };
       await this.game.ensureAudio();
       if (observer) {
@@ -184,6 +209,9 @@ export class UI {
         setTimeout(() => this.game.startObserver(params), 30);
       } else this.game.newGame(params);
     };
+    seedIn.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') void start();
+    });
     this.screen(
       h(
         'div',
@@ -234,7 +262,7 @@ export class UI {
     this.screen(
       h(
         'div',
-        { class: 'panel', style: 'min-width:620px' },
+        { class: 'panel', style: 'min-width:min(620px,100%)' },
         h('h2', {}, saving ? 'Save Game' : 'Load Game'),
         notice ? h('p', { class: notice.startsWith('Could not') ? 'warn' : 'muted' }, notice) : null,
         h('table', { class: 'list' }, ...rows),
@@ -247,11 +275,12 @@ export class UI {
     this.hud.style.display = '';
     const g = this.game;
     this.screen(
-      h('h1', { class: 'title', style: 'font-size:42px' }, 'Paused'),
+      h('h1', { class: 'title small' }, 'Paused'),
       h(
         'div',
         { class: 'menu-col' },
         btn('Resume', () => g.resume(), 'primary'),
+        g.input.touchMode && document.fullscreenEnabled ? btn(document.fullscreenElement ? 'Leave Full Screen' : 'Full Screen', () => g.toggleFullscreen(() => this.showPause())) : null,
         btn('Journal', () => this.showJournal('objectives', true)),
         btn('Save Game', () => this.showSaves(true, () => this.showPause())),
         btn('Load Game', () => this.showSaves(false, () => this.showPause())),
@@ -288,12 +317,24 @@ export class UI {
       });
       return h('div', { class: 'row' }, h('label', {}, label), inp);
     };
-    const quality = h('select', {}, h('option', { value: 'low' }, 'Low'), h('option', { value: 'medium' }, 'Medium'), h('option', { value: 'high' }, 'High')) as HTMLSelectElement;
-    quality.value = s.quality;
+    const quality = h('select', {}, h('option', { value: 'auto' }, `Automatic (${deviceQuality()})`), h('option', { value: 'low' }, 'Low'), h('option', { value: 'medium' }, 'Medium'), h('option', { value: 'high' }, 'High')) as HTMLSelectElement;
+    quality.value = s.graphicsAuto ? 'auto' : s.quality;
     quality.addEventListener('change', () => {
-      s.quality = quality.value as typeof s.quality;
+      s.graphicsAuto = quality.value === 'auto';
+      s.quality = s.graphicsAuto ? deviceQuality() : (quality.value as typeof s.quality);
       g.applySettings();
     });
+    const touchSel = h('select', {}, h('option', { value: 'auto' }, 'Automatic'), h('option', { value: 'on' }, 'Always on'), h('option', { value: 'off' }, 'Off')) as HTMLSelectElement;
+    touchSel.value = s.touchControls;
+    touchSel.addEventListener('change', () => {
+      s.touchControls = touchSel.value as typeof s.touchControls;
+      g.applySettings();
+    });
+    // a rebind waiting for a key must not swallow a later keystroke (or a phone keyboard's first letter)
+    const leave = () => {
+      g.input.capture = null;
+      back();
+    };
     const binds = h('table', { class: 'list' });
     const actions = Object.keys(DEFAULT_BINDINGS) as Action[];
     const renderBinds = () => {
@@ -317,7 +358,7 @@ export class UI {
     this.screen(
       h(
         'div',
-        { class: 'panel', style: 'min-width:560px' },
+        { class: 'panel', style: 'min-width:min(560px,100%)' },
         h('h2', {}, 'Settings'),
         h('h3', {}, 'Graphics'),
         h('div', { class: 'row' }, h('label', {}, 'Quality preset'), quality),
@@ -333,15 +374,17 @@ export class UI {
         range('Ambience', 'ambience', 0, 1, 0.05),
         check('3D audio (HRTF)', 'hrtf'),
         h('h3', {}, 'Controls'),
-        range('Mouse sensitivity', 'sensitivity', 0.2, 3, 0.05),
-        check('Invert mouse Y', 'invertY'),
-        h('details', {}, h('summary', { class: 'muted', style: 'cursor:pointer;margin:8px 0' }, 'Key bindings (click to rebind)'), binds),
+        h('div', { class: 'row' }, h('label', {}, 'Touch controls'), touchSel),
+        range('Look sensitivity', 'sensitivity', 0.2, 3, 0.05),
+        check('Invert look Y', 'invertY'),
+        g.input.touchMode ? null : h('details', {}, h('summary', { class: 'muted', style: 'cursor:pointer;margin:8px 0' }, 'Key bindings (click to rebind)'), binds),
         h(
           'div',
           { class: 'buttons' },
-          btn('Back', back, 'primary'),
+          btn('Back', leave, 'primary'),
           btn('Reset to defaults', () => {
-            Object.assign(s, structuredClone(DEFAULT_SETTINGS));
+            g.input.capture = null;
+            Object.assign(s, defaultSettings());
             g.applySettings();
             this.showSettings(back);
           }),
@@ -352,7 +395,17 @@ export class UI {
 
   showHelp(back: () => void) {
     const k = (a: Action) => this.game.input.keyName(a);
-    const rows: [string, string][] = [
+    const touchRows: [string, string][] = [
+      ['Left side', 'Put a thumb down and drag to walk; drag past the ring to sprint'],
+      ['Right side', 'Drag to look around'],
+      ['USE', 'Interact. Hold for alternative actions (lock doors, drag bodies, pick locks, board windows)'],
+      ['HIT / BLOCK', 'Attack with the equipped weapon (or fists) / hold to block'],
+      ['DODGE / CROUCH', 'Dodge / crouch and sneak (quieter, harder to see)'],
+      ['LIGHT / WEAPON', 'Flashlight / next weapon (past the last one: bare hands)'],
+      ['BAG, JOURNAL, MAP, WAIT', 'Inventory, journal, map, wait'],
+      ['❚❚', 'Pause, save, settings'],
+    ];
+    const rows: [string, string][] = this.game.input.touchMode ? touchRows : [
       [`${k('forward')}${k('left')}${k('back')}${k('right')} / Mouse`, 'Move / look'],
       [k('sprint'), 'Sprint (uses stamina)'],
       [k('crouch'), 'Crouch / sneak (quieter, harder to see)'],
@@ -368,6 +421,7 @@ export class UI {
       [k('pause'), 'Pause'],
       [k('observer'), 'Observer mode'],
     ];
+    const playHint = this.game.input.touchMode ? 'Play holding the phone sideways. ' : '';
     this.screen(
       h(
         'div',
@@ -376,7 +430,7 @@ export class UI {
         h('p', {}, 'Your late uncle believed one of your new neighbours kills at night. Everyone in town lives a real routine: they work, shop, drink, gossip and sleep. One of them goes out after midnight in a hooded coat.'),
         h('p', {}, 'By day, explore, buy supplies, introduce yourself and ask what people saw. Residents only know what they saw, heard or were told, and they tell you which. By night, lock your doors, board your windows, or go out with a flashlight and watch.'),
         h('p', {}, 'Physical traces at crime scenes, witness descriptions and your own sightings narrow down the suspects. Every resident you meet gets a profile in the journal: compare their coat, height, shoes, hair and habits with the evidence. When you are sure, accuse the culprit to the police chief. A wrong accusation costs you the chief’s trust.'),
-        h('p', { class: 'muted' }, 'You win when the Night Neighbour is arrested or dead. You lose if you die, are jailed for murder, or the last night ends with the killer free.'),
+        h('p', { class: 'muted' }, `${playHint}You win when the Night Neighbour is arrested or dead. You lose if you die, are jailed for murder, or the last night ends with the killer free.`),
         h('table', { class: 'list' }, ...rows.map(([a, b]) => h('tr', {}, h('td', { class: 'mono' }, a), h('td', {}, b)))),
         h('div', { class: 'buttons' }, btn('Back', back, 'primary')),
       ),
@@ -464,7 +518,7 @@ export class UI {
           render();
         }, 'small')));
       });
-      this.openPanel('container', h('div', { class: 'panel', style: 'min-width:620px' }, h('div', { class: 'grid2' }, left, right), h('div', { class: 'buttons' }, btn('Close', () => this.closeDialog(), 'primary'))));
+      this.openPanel('container', h('div', { class: 'panel', style: 'min-width:min(620px,100%)' }, h('div', { class: 'grid2' }, left, right), h('div', { class: 'buttons' }, btn('Close', () => this.closeDialog(), 'primary'))));
     };
     render();
   }
@@ -496,7 +550,7 @@ export class UI {
             render();
           }, 'small')));
         }
-      this.openPanel('trade', h('div', { class: 'panel', style: 'min-width:680px' }, h('div', { class: 'muted' }, `${fullName(n)}: "What can I get you?"  —  You have $${p.money}`), h('div', { class: 'grid2' }, buy, sell), h('div', { class: 'buttons' }, btn('Done', () => this.closeDialog(), 'primary'))));
+      this.openPanel('trade', h('div', { class: 'panel', style: 'min-width:min(680px,100%)' }, h('div', { class: 'muted' }, `${fullName(n)}: "What can I get you?"  —  You have $${p.money}`), h('div', { class: 'grid2' }, buy, sell), h('div', { class: 'buttons' }, btn('Done', () => this.closeDialog(), 'primary'))));
     };
     render();
   }
@@ -607,7 +661,7 @@ export class UI {
         'inventory',
         h(
           'div',
-          { class: 'panel', style: 'min-width:560px' },
+          { class: 'panel', style: 'min-width:min(560px,100%)' },
           h('h2', {}, 'Inventory'),
           h('div', { class: 'muted', style: 'margin-bottom:8px' }, `Money: $${p.money}   Flashlight battery: ${Math.round(p.battery)}%   Health ${Math.round(p.health)}   Hunger ${Math.round(p.hunger)}%   Energy ${Math.round(p.energy)}%`),
           ...(rows.length ? rows : [h('div', { class: 'muted' }, 'Your pockets are empty.')]),
@@ -794,7 +848,7 @@ export class UI {
     const k = sim.npc(sim.killerId)!;
     this.hud.style.display = 'none';
     this.screen(
-      h('h1', { class: 'title', style: `font-size:46px;color:${e.win ? '#e8dcc0' : '#d08070'}` }, e.title),
+      h('h1', { class: 'title small', style: `color:${e.win ? '#e8dcc0' : '#d08070'}` }, e.title),
       h(
         'div',
         { class: 'panel', style: 'max-width:640px' },
@@ -854,7 +908,7 @@ export class UI {
     const showPrompt = g.mode === 'playing' && t.kind !== 'none' && !!t.prompt;
     e.prompt.style.display = showPrompt ? '' : 'none';
     if (showPrompt) {
-      const html = `${escapeHtml(t.prompt)}${t.alt ? `<div class="alt">${escapeHtml(t.alt)}</div>` : ''}`;
+      const html = `${escapeHtml(this.controlText(t.prompt))}${t.alt ? `<div class="alt">${escapeHtml(this.controlText(t.alt))}</div>` : ''}`;
       if (e.prompt.innerHTML !== html) e.prompt.innerHTML = html;
     }
     e.cross.className = showPrompt ? 'crosshair target' : 'crosshair';
@@ -865,7 +919,7 @@ export class UI {
       c.setAttribute('stroke-dashoffset', String(119.4 * (1 - clamp(pc.holdT / pc.holdNeeded, 0, 1))));
     }
     e.vignette.style.opacity = String(Math.max(pc.damageFlash, p.health < 30 ? (1 - p.health / 30) * 0.6 : 0));
-    e.hint.style.display = g.mode === 'playing' && !g.input.locked ? '' : 'none';
+    e.hint.style.display = g.mode === 'playing' && !g.input.active ? '' : 'none';
     this.updateBubbles(now);
     // messages fade
     for (const m of this.messages) {
@@ -911,7 +965,7 @@ export class UI {
       html += `<span class="obj" style="left:${pos}%">▼ ${Math.round(dist)}m</span>`;
     }
     e.compass.innerHTML = html;
-    e.objectives.innerHTML = g.story!.objectives.slice(0, 3).map((o) => `<div>${escapeHtml(o.text)}</div>`).join('');
+    e.objectives.innerHTML = g.story!.objectives.slice(0, 3).map((o) => `<div>${escapeHtml(this.controlText(o.text))}</div>`).join('');
     // equipment
     const slots = pc.weaponSlots();
     const eq = p.weapon ? ITEMS[p.weapon]?.name ?? p.weapon : 'Bare hands';
@@ -1002,7 +1056,7 @@ export class UI {
       ...speedBtns,
       ...toggles,
       btn('Exit', () => g.exitObserver(), 'small danger'),
-      h('span', { class: 'muted' }, 'Click the view, then WASD/Space/C to fly, Shift = fast'),
+      h('span', { class: 'muted' }, g.input.touchMode ? 'Drag to look, left stick to fly, UP/DOWN to climb' : 'Click the view, then WASD/Space/C to fly, Shift = fast'),
     );
     const detail = h('div', {});
     const incidents = h('div', {});

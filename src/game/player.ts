@@ -264,8 +264,16 @@ export class PlayerController {
     if (inp.held('back')) mz += 1;
     if (inp.held('left')) mx -= 1;
     if (inp.held('right')) mx += 1;
-    const ml = Math.hypot(mx, mz);
-    const wantSprint = inp.held('sprint') && ml > 0 && !p.crouching && mz <= 0 && p.stamina > 1 && p.carrying < 0;
+    // touch stick (analog)
+    mx += inp.moveX;
+    mz += inp.moveY;
+    let ml = Math.hypot(mx, mz);
+    if (ml > 1) {
+      mx /= ml;
+      mz /= ml;
+      ml = 1;
+    }
+    const wantSprint = (inp.held('sprint') || inp.stickSprint) && ml > 0 && !p.crouching && mz <= 0.05 && p.stamina > 1 && p.carrying < 0;
     p.sprinting = wantSprint;
     let speed = p.crouching ? CFG.playerCrouch : wantSprint ? CFG.playerSprint : CFG.playerWalk;
     if (p.carrying >= 0) speed = 1.1;
@@ -297,8 +305,9 @@ export class PlayerController {
     const ox = p.x;
     const oz = p.z;
     if (ml > 0 && this.dodgeT <= 0) {
-      const lx = mx / ml;
-      const lz = mz / ml;
+      // keys give full speed; a lightly pushed stick walks slower
+      const lx = mx;
+      const lz = mz;
       const s = Math.sin(p.yaw);
       const c = Math.cos(p.yaw);
       // local (x right, z back) to world
@@ -326,7 +335,7 @@ export class PlayerController {
     } else p.noise = Math.max(0, p.noise - dt * 10);
     // combat
     p.blocking = inp.rmb && p.stamina > 3 && p.carrying < 0;
-    if (inp.lmbPressed && inp.locked && !p.blocking && p.carrying < 0) {
+    if (inp.lmbPressed && inp.active && !p.blocking && p.carrying < 0) {
       if (startAttack(sim, p)) this.hurtShake = Math.max(this.hurtShake, 0.05);
     }
     // hotbar
@@ -532,9 +541,10 @@ export class PlayerController {
     // hold actions
     if (this.holdAction) {
       if (!holding || t.kind === 'none') {
-        // released early: short press behaviour
+        // released early: short press behaviour. Finger taps on a touch button last longer than key
+        // taps, and letting go of a short hold (lock, drag, search) before it completes is a tap too.
         const action = this.holdAction;
-        const short = this.holdT < 0.25;
+        const short = this.holdT < (inp.touchMode ? 0.4 : 0.25) || (this.holdNeeded <= 0.6 && this.holdT < this.holdNeeded);
         this.holdAction = '';
         this.holdT = 0;
         if (short) this.pressAction(action);

@@ -92,13 +92,16 @@ export class GameRenderer {
   /** extra groups (characters, effects) owned by other modules */
   layers = new THREE.Group();
   quality: Quality = 'medium';
+  /** a phone or tablet: the pixel ratio follows a pixel budget and MSAA stays off */
+  mobile = false;
   brightness = 1;
   postEnabled = true;
   private lastT = 0;
   private camDir = new THREE.Vector3();
   stats = { calls: 0, tris: 0 };
 
-  constructor(public canvas: HTMLCanvasElement) {
+  constructor(public canvas: HTMLCanvasElement, mobile = false) {
+    this.mobile = mobile;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', stencil: false });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -129,7 +132,12 @@ export class GameRenderer {
     this.scene.add(this.flashlight);
     this.scene.add(this.flashlight.target);
     this.scene.add(this.layers);
-    this.composer = new EffectComposer(this.renderer);
+    // some mobile GPUs cannot render into half-float targets; 8-bit ones still work (with banding)
+    const ext = this.renderer.extensions;
+    const halfFloat = ext.has('EXT_color_buffer_half_float') || ext.has('EXT_color_buffer_float');
+    this.composer = halfFloat
+      ? new EffectComposer(this.renderer)
+      : new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.UnsignedByteType }));
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(new OutputPass());
     this.fx = new ShaderPass(FX_SHADER);
@@ -138,12 +146,40 @@ export class GameRenderer {
     this.resize();
   }
 
+  private pixelRatio() {
+    const q = this.quality;
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    if (!this.mobile) return q === 'low' ? Math.min(dpr, 1) * 0.75 : q === 'medium' ? Math.min(dpr, 1.25) : Math.min(dpr, 2);
+    // phones: sharp enough on small screens, bounded on large tablets
+    const [w, h] = this.cssSize();
+    const budget = q === 'low' ? 450_000 : q === 'medium' ? 800_000 : 1_200_000;
+    const cap = q === 'low' ? 1 : q === 'medium' ? 1.25 : 1.5;
+    return Math.max(0.5, Math.min(dpr, cap, Math.sqrt(budget / Math.max(1, w * h))));
+  }
+
+  private cssSize(): [number, number] {
+    return [Math.floor(this.canvas.clientWidth || window.innerWidth), Math.floor(this.canvas.clientHeight || window.innerHeight)];
+  }
+
+  private applyPixelRatio() {
+    const pr = this.pixelRatio();
+    if (pr !== this.renderer.getPixelRatio()) {
+      this.renderer.setPixelRatio(pr);
+      this.composer.setPixelRatio(pr);
+    }
+    this.updateGlowScale();
+  }
+
+  /** light glows are sized in drawing-buffer pixels; keep them in proportion on small phone buffers */
+  private updateGlowScale() {
+    if (!this.pool) return;
+    const u = (this.pool.glow.material as THREE.ShaderMaterial).uniforms.scale;
+    u.value = this.mobile ? 600 * Math.min(1, this.renderer.getContext().drawingBufferHeight / 900) : 600;
+  }
+
   setQuality(q: Quality) {
     this.quality = q;
-    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const pr = q === 'low' ? Math.min(dpr, 1) * 0.75 : q === 'medium' ? Math.min(dpr, 1.25) : Math.min(dpr, 2);
-    this.renderer.setPixelRatio(pr);
-    this.composer.setPixelRatio(pr);
+    this.applyPixelRatio();
     this.renderer.shadowMap.enabled = q !== 'low';
     const ms = q === 'high' ? 2048 : 1024;
     this.sun.shadow.mapSize.set(ms, ms);
@@ -161,8 +197,10 @@ export class GameRenderer {
     setAnisotropy(q === 'high' ? 8 : q === 'medium' ? 4 : 1);
     if (this.pool) this.pool.setSize(q === 'low' ? 4 : q === 'medium' ? 8 : 12, this.scene);
     const rt = (this.composer as unknown as { renderTarget1: THREE.WebGLRenderTarget; renderTarget2: THREE.WebGLRenderTarget });
-    rt.renderTarget1.samples = q === 'high' ? 4 : 0;
-    rt.renderTarget2.samples = q === 'high' ? 4 : 0;
+    // multisampled half-float targets are too heavy for phone memory
+    const samples = q === 'high' && !this.mobile ? 4 : 0;
+    rt.renderTarget1.samples = samples;
+    rt.renderTarget2.samples = samples;
     // material shader variants depend on the shadow configuration
     this.scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
@@ -171,10 +209,10 @@ export class GameRenderer {
   }
 
   resize() {
-    const w = this.canvas.clientWidth || window.innerWidth;
-    const h = this.canvas.clientHeight || window.innerHeight;
+    const [w, h] = this.cssSize();
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
+    this.applyPixelRatio();
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
   }
@@ -185,6 +223,7 @@ export class GameRenderer {
     this.meshes = buildWorldMeshes(world);
     this.scene.add(this.meshes.group);
     this.pool = new LightPool(world, this.quality === 'low' ? 4 : this.quality === 'medium' ? 8 : 12, this.scene);
+    this.updateGlowScale();
     this.dynamic = new DynamicObjects(world);
     this.scene.add(this.dynamic.group);
   }

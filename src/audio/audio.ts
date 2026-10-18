@@ -72,16 +72,37 @@ export class AudioEngine {
   ready = false;
   private randomT = 8;
 
-  /** must be called from a user gesture */
+  /**
+   * Create (or wake) the audio context. Cheap; call it synchronously inside the tap or click that
+   * starts the game, because iOS only lets a context start from within a user gesture.
+   */
+  unlock() {
+    if (!this.ctx) {
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      try {
+        this.ctx = new Ctx();
+      } catch {
+        return;
+      }
+    }
+    this.wake();
+  }
+
+  /** resume a context the browser suspended or interrupted (iOS after a call) */
+  wake() {
+    if (this.ctx && this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
+  }
+
+  /** builds the sound bank and mixer; call after unlock() */
   async init() {
-    if (this.ctx) {
-      if (this.ctx.state === 'suspended') await this.ctx.resume();
+    this.unlock();
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (this.ready) {
+      if (ctx.state !== 'running') await ctx.resume();
       return;
     }
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    this.ctx = ctx;
     this.master = ctx.createGain();
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
@@ -109,11 +130,11 @@ export class AudioEngine {
     for (const k of ['amb_wind', 'amb_crickets', 'amb_birds', 'amb_traffic', 'amb_hum']) this.startLoop(k);
     this.applyVolumes();
     this.ready = true;
-    if (ctx.state === 'suspended') await ctx.resume();
+    if (ctx.state !== 'running') await ctx.resume();
   }
 
   applyVolumes() {
-    if (!this.ctx) return;
+    if (!this.ctx || !this.ready) return;
     this.master.gain.value = this.volumes.master;
     this.sfx.gain.value = this.volumes.sfx;
     this.amb.gain.value = this.volumes.ambience;
@@ -298,10 +319,10 @@ export class AudioEngine {
   }
 
   suspend() {
-    this.ctx?.suspend();
+    this.ctx?.suspend().catch(() => {});
   }
 
   resume() {
-    this.ctx?.resume();
+    this.ctx?.resume().catch(() => {});
   }
 }

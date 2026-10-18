@@ -1,12 +1,16 @@
 // Browser smoke test runner: builds the game and serves it with `vite preview`
-// (unless NN_URL points at a running server),
-// drives the game through e2e/smoke.mjs in headless Chromium and writes
-// screenshots to e2e/out (or NN_OUT).  Exit code 1 if any check fails.
+// (unless NN_URL points at a running server), drives the game in headless Chromium
+// through e2e/smoke.mjs (desktop: keyboard and mouse) and e2e/mobile.mjs (an emulated
+// phone: touch only), and writes screenshots to e2e/out (or NN_OUT).
+// NN_SUITE=desktop or NN_SUITE=mobile runs one of the two. Exit code 1 if any check fails.
 import { spawn, spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { launch } from './lib.mjs';
-import smoke, { results } from './smoke.mjs';
+import smoke, { results as desktopResults } from './smoke.mjs';
+import mobile, { results as mobileResults } from './mobile.mjs';
+
+const suite = process.env.NN_SUITE ?? 'all';
 
 const outDir = process.env.NN_OUT ?? 'e2e/out';
 let base = process.env.NN_URL;
@@ -43,18 +47,26 @@ if (!base) {
 }
 
 const t0 = Date.now();
-const { browser, page, h } = await launch({ base, outDir, width: 1280, height: 720 });
 let crashed = null;
-try {
-  await smoke(page, h);
-} catch (e) {
-  crashed = e;
-  console.log('SMOKE TEST ABORTED:', e && e.stack ? e.stack : e);
+for (const [name, run, opts] of [
+  ['desktop', smoke, { width: 1280, height: 720 }],
+  ['mobile', mobile, { mobile: true }],
+]) {
+  if (suite !== 'all' && suite !== name) continue;
+  console.log(`\n=== ${name}`);
+  const { browser, page, h } = await launch({ base, outDir, ...opts });
   try {
-    await h.shot('aborted');
-  } catch {}
+    await run(page, h);
+  } catch (e) {
+    crashed = crashed ?? e;
+    console.log(`${name.toUpperCase()} SMOKE TEST ABORTED:`, e && e.stack ? e.stack : e);
+    try {
+      await h.shot(`aborted_${name}`);
+    } catch {}
+  }
+  await browser.close();
 }
-await browser.close();
+const results = [...desktopResults, ...mobileResults];
 if (server) {
   try {
     process.kill(-server.pid);

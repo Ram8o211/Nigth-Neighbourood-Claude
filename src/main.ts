@@ -5,6 +5,8 @@ import { UI } from './ui/ui';
 import { installTestApi } from './game/testapi';
 
 const params = new URLSearchParams(location.search);
+// iOS ignores user-scalable=no; a pinch would zoom the whole game
+document.addEventListener('gesturestart', (e) => e.preventDefault());
 if (params.has('viewer')) {
   runViewer(params);
 } else {

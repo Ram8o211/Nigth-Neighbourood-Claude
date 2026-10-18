@@ -72,11 +72,11 @@ export class Observer {
   update(dt: number) {
     const inp = this.game.input;
     const sens = 0.0022 * inp.sensitivity;
-    if (inp.locked) {
+    if (inp.active) {
       this.yaw -= inp.mouseDX * sens;
       this.pitch = Math.max(-1.5, Math.min(1.4, this.pitch - inp.mouseDY * sens));
     }
-    const fast = inp.held('sprint') ? 40 : 14;
+    const fast = inp.held('sprint') || inp.stickSprint ? 40 : 14;
     const f = new THREE.Vector3(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch));
     const r = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     const mv = new THREE.Vector3();
@@ -86,7 +86,9 @@ export class Observer {
     if (inp.held('left')) mv.sub(r);
     if (inp.held('dodge')) mv.y += 1;
     if (inp.held('crouch')) mv.y -= 1;
-    if (mv.lengthSq() > 0) {
+    // touch stick
+    mv.addScaledVector(f, -inp.moveY).addScaledVector(r, inp.moveX);
+    if (mv.lengthSq() > 0.0004) {
       this.follow = false;
       this.pos.addScaledVector(mv.normalize(), fast * dt);
     }
