@@ -64,7 +64,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          source="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.build_type + " " + .source.branch + " " + .source.path' 2>/dev/null || true)"
+          source="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.build_type + " " + .source.branch + " " + .source.path' 2>/dev/null)" || source=""
           if [ "$source" != "legacy gh-pages /" ]; then
             echo "GitHub Pages is currently set to: ${source:-not enabled}"
             # usually needs admin rights the workflow token does not have; then the owner changes the setting once

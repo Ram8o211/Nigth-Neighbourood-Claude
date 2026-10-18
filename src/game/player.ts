@@ -97,13 +97,18 @@ export class PlayerController {
     const s = inv.find((x) => x.item === item);
     if (!s || s.n < n) return false;
     s.n -= n;
-    if (s.n <= 0) {
-      const idx = inv.indexOf(s);
-      inv.splice(idx, 1);
-      if (this.p.equipped === idx) this.equip(-1);
-      else if (this.p.equipped > idx) this.p.equipped--;
-    }
+    if (s.n <= 0) this.removeStack(inv.indexOf(s));
     return true;
+  }
+
+  /** remove a whole inventory slot, keeping the equipped slot and the flashlight consistent */
+  removeStack(idx: number) {
+    const p = this.p;
+    if (!p.inventory[idx]) return;
+    p.inventory.splice(idx, 1);
+    if (p.equipped === idx) this.equip(-1);
+    else if (p.equipped > idx) p.equipped--;
+    if (p.flashlight && !this.count('flashlight')) p.flashlight = false;
   }
 
   equip(idx: number) {
@@ -178,9 +183,7 @@ export class PlayerController {
     const fx = Math.sin(p.yaw);
     const fz = -Math.cos(p.yaw);
     this.sim.dropItem(s.item, p.x + fx * 0.7, p.z + fz * 0.7, s.n, s.tag ?? -1, itemName(s.item));
-    p.inventory.splice(idx, 1);
-    if (p.equipped === idx) this.equip(-1);
-    else if (p.equipped > idx) p.equipped--;
+    this.removeStack(idx);
   }
 
   // ------------------------------------------------------------------ update

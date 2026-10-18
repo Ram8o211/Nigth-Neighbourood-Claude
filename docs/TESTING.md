@@ -18,13 +18,14 @@ gzipped) plus CSS – there are no asset files because everything is generated.
 
 ## Unit and simulation tests (`npm test`)
 
-35 tests in 5 files, all passing (last full run: 21 s wall time).
+37 tests in 6 files, all passing (last full run: 20 s wall time).
 
 | File | What it checks |
 | --- | --- |
 | `tests/worldgen.test.ts` (9) | Same seed → identical town, different seed → different town; required buildings for all three sizes; doors and windows sit in wall openings on the correct sides; every building entrance, room, door side and furniture use point is reachable from the player's house; every home has a telephone and the player's house a table; connected roads/sidewalks; street lights, porch lights and dark alleys (8 seeds). |
 | `tests/sim.test.ts` (14) | Population is reproducible and well formed (one killer, police, a chief, a lair); the simulation is deterministic (two runs of 1 500 steps are bit-identical); residents are at work by day and >80 % asleep at 3 am, couples side by side in their double bed; visibility drops in darkness, rises with a flashlight, is zero behind the observer and through walls; *saw / heard / told* memories are kept apart and hearsay loses confidence; repeated observations merge; melee hits in range, respects cooldowns, never hits through a wall, kills, opens an incident and spills blood; a killing witnessed by a neighbour who knows you raises your wanted level and opens a police case; police turn consistent witness descriptions into the right suspect and conflicting ones into none, never suspect an officer for using force, make a prowler a person of interest but arrest for violence, and hand a prisoner to another officer when the escort is called away; **save → JSON → load into a freshly generated world → 1 200 more steps** is identical to never having saved, and an open-ended activity is still open-ended after the JSON round trip. |
 | `tests/story.test.ts` (9) | Game start (bus stop, key, letter); weak or contradicting accusations are rejected; a well-supported accusation gets the killer arrested by the simulated police and produces the winning ending; death and running out of nights produce the losing endings; journal and story state survive serialisation; save validation rejects outdated format, other generator, older simulation, incomplete and corrupt data; empty and corrupt slots are reported without throwing; stored settings from other sites or with out-of-range values and invalid key bindings are cleaned up. |
+| `tests/player.test.ts` (2) | Removing an inventory slot (storing, dropping, selling) keeps the equipped weapon on the right slot and switches the flashlight off when the last one is gone. |
 | `tests/audio.test.ts` (2) | Every sample name the audio engine plays exists in the synthesized bank (57 sounds, 88 s of audio, built in about 0.45 s); every buffer is finite, audible and does not clip. |
 | `tests/emergent.test.ts` (1) | Three towns run headless for three full days and nights with nobody scripting anything. Requires murders, discovered bodies, police cases and reports, no resident stuck on path failures, finite positions. |
 
@@ -207,14 +208,20 @@ the game on real hardware (the FPS counter is in *Settings → Graphics*).
   bat swing missed its target. CI now drives full Chromium like the local
   runs (no bogus jumps there). The game ignores only the first mouse movement
   after the pointer is captured, which some browsers report with the cursor's
-  old offset; fast real mouse-look is never discarded.
+  old offset; at most that one event (a frame's worth) is lost, and fast
+  mouse-look is no longer thrown away.
 * An automated review of the merge pull request found three bugs, all fixed:
   saves turned an open-ended resident activity deadline (`Infinity`) into
   `null`, so after loading, residents dropped what they were doing (now
   restored; covered by a test); the ending screen's *New game* and *Load*
   buttons left the "ending shown" flag set, so a later game could never show
   its ending; storing an inventory item that came before the equipped weapon
-  left the equipped index pointing at the wrong slot.
+  left the equipped index pointing at the wrong slot. A second review of those
+  fixes found two older relatives: storing, dropping or selling a lit
+  flashlight left its beam on with no way to switch it off, and an ending
+  that arrived while the arrest dialog was open blocked every later arrest
+  until the page was reloaded. Both are fixed (the first covered by
+  `tests/player.test.ts`).
 * The crowbar's description promised prying doors and windows open, which was
   not implemented; cigarettes were sold but had no use (now: offer one to a
   smoker for rumours).

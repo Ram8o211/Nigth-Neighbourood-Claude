@@ -159,7 +159,7 @@ and during sleep fast-forward. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ```bash
 npm run typecheck    # TypeScript, strict
-npm test             # Vitest: world generation, simulation, story, saves, multi-night runs
+npm test             # Vitest: world generation, simulation, story, saves, inventory, multi-night runs
 npm run test:e2e     # builds, serves and drives the real game in headless Chromium
 ```
 

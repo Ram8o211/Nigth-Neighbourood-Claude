@@ -160,6 +160,9 @@ export class Game {
     this.observer = null;
     this.ff = null;
     this.discovered.clear();
+    // an ending can arrive while the arrest or conversation dialog is open
+    this.arrestOfficer = -1;
+    this.dialogNpc = -1;
   }
 
   async ensureAudio() {
@@ -813,9 +816,7 @@ export class Game {
     if (!s) return;
     if (!f.container) f.container = [];
     f.container.push({ ...s });
-    this.sim!.player.inventory.splice(invIdx, 1);
-    if (this.sim!.player.equipped === invIdx) pl.equip(-1);
-    else if (this.sim!.player.equipped > invIdx) this.sim!.player.equipped--;
+    pl.removeStack(invIdx);
   }
 
   onOpenContainer(f: Furniture) {
