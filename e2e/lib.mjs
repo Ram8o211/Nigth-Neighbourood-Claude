@@ -60,15 +60,16 @@ export async function launch({ base, outDir, width = 1280, height = 720, mobile 
       console.log('  screenshot', p);
       return p;
     },
+    // only visible buttons: the touch controls (hidden on desktop) also say MAP, JOURNAL, WAIT...
     async clickText(text, sel = 'button') {
-      await page.locator(sel, { hasText: text }).first().click({ timeout: 15000 });
+      await page.locator(sel, { hasText: text }).filter({ visible: true }).first().click({ timeout: 15000 });
     },
     /** a finger tap (touch pointer events, then click) */
     async tapText(text, sel = 'button') {
-      await page.locator(sel, { hasText: text }).first().tap({ timeout: 15000 });
+      await page.locator(sel, { hasText: text }).filter({ visible: true }).first().tap({ timeout: 15000 });
     },
     async hasText(text, sel = 'button') {
-      return (await page.locator(sel, { hasText: text }).count()) > 0;
+      return (await page.locator(sel, { hasText: text }).filter({ visible: true }).count()) > 0;
     },
     async hold(key, ms) {
       await page.keyboard.down(key);
