@@ -91,14 +91,46 @@ target. Checks:
   now offers *Continue*
 * no uncaught page errors and no errors in the game loop
 
-Last run: **73 of 73 checks passed** in 530 s (most of the time is the
-software renderer drawing frames). The run log is printed to the console and
-saved as `e2e/out/e2e-results.json`.
+Last run: **73 of 73 checks passed** (most of the time is the software
+renderer drawing frames). The run log is printed to the console and saved as
+`e2e/out/e2e-results.json`.
+
+### Phones and tablets (`e2e/mobile.mjs`)
+
+The same runner then plays the game on an **emulated landscape phone**
+(Chromium with a touch screen and a mobile viewport, 844×390, no mouse or
+keyboard), with finger taps for the menus and real multi-touch events (sent
+through the Chrome DevTools Protocol, `e2e/touch.mjs`) for the on-screen
+controls. It checks that:
+
+* the touch controls switch on by themselves, the phone starts on the *low*
+  preset at pixel ratio 1, and no pointer lock is taken
+* the main menu, settings (touch option shown, key rebinding hidden), help,
+  load and new-game screens fit the screen without zooming or sideways
+  scrolling
+* the left stick walks, past its rim sprints, and a thumb resting at the
+  screen edge does not move the player; dragging on the right turns the view
+* prompts read *[Use]*; USE unlocks the door and opens the letter, whose
+  *Fold* button stays reachable on the short screen
+* CROUCH, BLOCK (held), LIGHT, WEAPON and HIT work; HIT with a second finger
+  while the thumb rests on the stick swings the bat; a second finger also
+  closes a dialog while the thumb stays down
+* BAG, JOURNAL, MAP, WAIT and ❚❚ open their screens, which fit
+* turning the phone upright pauses with a notice whose *Menu* button reaches
+  the pause menu; turning it back resumes and the view is resized
+* observer mode shows its own controls (not hidden by the inspector panel)
+  and the stick flies the camera
+* at 640×360, 667×375, 740×360, 915×412 and 1024×768 every control is on
+  screen, not covered, clear of the HUD text, and the pause menu fits
+* no page errors and no errors in the game loop
+
+Last run: **64 of 64 checks passed** in 132 s. Both suites together (what
+CI runs): **132 of 132** at the time (59 mobile checks then) in 669 s.
 
 Screenshots of each step are written to `e2e/out/`; a selection is in
 `docs/screenshots/`.
 
-The same smoke test runs in GitHub Actions after every deployment to GitHub
+Both smoke tests run in GitHub Actions after every deployment to GitHub
 Pages, against the live site (`.github/workflows/pages.yml`, job *Browser
 smoke test on the live site*), once the site serves the build that was just
 published; it can be pointed at any deployment with `NN_URL=<url> npm run
@@ -226,6 +258,15 @@ the game on real hardware (the FPS counter is in *Settings → Graphics*).
   after closing a dialog, but the HUD redraws it only every six frames, so
   they passed or failed by chance (one failed once). They now wait for the
   HUD to refresh.
+* Making the game playable on phones, the mobile smoke test and a review
+  found: observer UP/DOWN buttons hidden under the inspector panel; menu
+  buttons ignoring taps while the thumb rested on the stick (browsers make no
+  click from a second finger's tap); a thumb landing near the screen edge
+  walking the player; the "turn your phone sideways" notice trapping players
+  with rotation lock on; saves taken when the page was hidden overwriting the
+  morning checkpoint (and, during a night in the cells, locking the player in
+  for good); input-mode switches swallowing a click; HUD text under the
+  controls on 640–740 px wide phones. All fixed and covered by the tests above.
 * The crowbar's description promised prying doors and windows open, which was
   not implemented; cigarettes were sold but had no use (now: offer one to a
   smoker for rumours).
@@ -233,6 +274,13 @@ the game on real hardware (the FPS counter is in *Settings → Graphics*).
 ## Known limitations
 
 * **Performance on real GPUs is unmeasured** (see above).
+* **Phones and tablets were tested only in emulation** (Chromium's mobile
+  mode with emulated touch), never on a real iPhone, iPad or Android device.
+  Things emulation cannot show: frame rate on phone GPUs, iOS Safari's own
+  behaviour (it has no full-screen API on iPhone; *Add to Home Screen* gives
+  a full-screen app whose saves are separate from Safari's), orientation
+  lock, and audio: on an iPhone the silent switch mutes the game. Phones are
+  played sideways; upright, the game pauses.
 * Visual style is deliberately simple: characters are rounded-box figures with
   procedural animation (no skinned meshes or motion capture), buildings are
   single-storey, there are no vehicles moving.
