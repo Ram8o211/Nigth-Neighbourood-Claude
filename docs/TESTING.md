@@ -91,7 +91,7 @@ target. Checks:
   now offers *Continue*
 * no uncaught page errors and no errors in the game loop
 
-Last run: **73 of 73 checks passed** in 559 s (most of the time is the
+Last run: **73 of 73 checks passed** in 530 s (most of the time is the
 software renderer drawing frames). The run log is printed to the console and
 saved as `e2e/out/e2e-results.json`.
 
