@@ -99,9 +99,18 @@ Screenshots of each step are written to `e2e/out/`; a selection is in
 
 The same smoke test runs in GitHub Actions after every deployment to GitHub
 Pages, against the live site (`.github/workflows/pages.yml`, job *Browser
-smoke test on the live site*), and can be pointed at any deployment with
-`NN_URL=<url> npm run test:e2e`. Branches and pull requests run type-check,
-unit tests and a build (`.github/workflows/ci.yml`).
+smoke test on the live site*), once the site serves the build that was just
+published; it can be pointed at any deployment with `NN_URL=<url> npm run
+test:e2e`. Branches and pull requests run type-check, unit tests and a build
+(`.github/workflows/ci.yml`).
+
+The browser is launched without any autoplay override, so the audio check
+proves that sound starts from the player's click as it would for a real
+player, and any failed request for the game's own files (HTTP 4xx/5xx) is
+reported as an error. Before the first deployment the production bundle was
+also served from the same sub-path GitHub Pages uses
+(`/Nigth-Neighbourood-Claude/`) by a plain static server: all 73 checks passed
+there and every request for the game's files returned 200.
 
 ## Performance
 
@@ -217,4 +226,7 @@ the game on real hardware (the FPS counter is in *Settings → Graphics*).
   about 320 kB at the start and 375 kB after five days in a medium town, so the
   autosave and three slots fit, but other sites' data on the same origin could
   crowd them out (the game reports a failed save instead of crashing).
-* Tested only in Chromium. Firefox and Safari were not tested.
+* Tested only in Chromium. Firefox and Safari were not tested. The mouse is
+  captured (pointer lock) after the town has been generated, outside the click
+  that started it; Chromium allows that, Firefox may not, in which case the
+  game shows *Click to look around* and one click on the view captures it.

@@ -1,9 +1,10 @@
-# Builds the game, deploys it to GitHub Pages and then plays through the
-# browser smoke test against the live site.
+# Builds the game, publishes it to GitHub Pages (from the gh-pages branch) and
+# then plays through the browser smoke test against the live site.
 #
-# One-time setup: Settings -> Pages -> Build and deployment -> Source:
-# "GitHub Actions". After that every push to main redeploys, and the
-# workflow can also be started by hand from the Actions tab.
+# Site: https://<owner>.github.io/<repository>/
+# Pages must serve the gh-pages branch: Settings -> Pages -> Build and
+# deployment -> Source: "Deploy from a branch", Branch: gh-pages / (root).
+# (A gh-pages branch pushed by a person usually switches this on by itself.)
 name: Deploy to GitHub Pages
 
 on:
@@ -12,9 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write # push the built site to the gh-pages branch
 
 # one deployment at a time; a newer push waits instead of cancelling a deploy in progress
 concurrency:
@@ -22,10 +21,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Type-check, test and build
+  publish:
+    name: Type-check, test, build and publish
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      page_url: ${{ steps.publish.outputs.page_url }}
+      entry: ${{ steps.publish.outputs.entry }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -36,33 +38,42 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: dist
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    outputs:
-      page_url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Push the built site to the gh-pages branch
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          entry=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' dist/index.html | head -1)
+          test -n "$entry"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "entry=$entry" >> "$GITHUB_OUTPUT"
+          echo "page_url=https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/" >> "$GITHUB_OUTPUT"
+          cd dist
+          touch .nojekyll
+          git init -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Deploy ${GITHUB_SHA::7} (${entry})"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
 
   smoke:
     name: Browser smoke test on the live site
-    needs: deploy
+    needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      NN_URL: ${{ needs.deploy.outputs.page_url }}
+      NN_URL: ${{ needs.publish.outputs.page_url }}
+      ENTRY: ${{ needs.publish.outputs.entry }}
       NN_OUT: e2e/out
     steps:
+      - name: Wait until GitHub Pages serves this build
+        run: |
+          for i in $(seq 1 90); do
+            if curl -sfL "$NN_URL" | grep -qF "$ENTRY"; then echo "Live: $NN_URL serves $ENTRY"; exit 0; fi
+            sleep 10
+          done
+          echo "::error::$NN_URL did not serve $ENTRY within 15 minutes. If this is the first deployment, check Settings -> Pages -> Source: Deploy from a branch, gh-pages / (root)."
+          exit 1
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
@@ -71,13 +82,6 @@ jobs:
       - run: npm ci
       - name: Install Chromium for the smoke test
         run: npx playwright-core install --with-deps chromium
-      - name: Wait until the new deployment is served
-        run: |
-          for i in $(seq 1 30); do
-            if curl -sfL "$NN_URL" | grep -q 'Night Neighbour'; then exit 0; fi
-            sleep 10
-          done
-          echo "Site did not come up at $NN_URL" && exit 1
       - name: Play through the game in headless Chromium (software rendering)
         run: node e2e/run-e2e.mjs
       - uses: actions/upload-artifact@v4

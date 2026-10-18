@@ -121,7 +121,7 @@ describe('save files', () => {
     } as Storage;
   });
 
-  const good = () => ({ saveVersion: SAVE_VERSION, worldVersion: WORLD_VERSION, simVersion: SIM_VERSION, params: { seed: 'x', size: 'small', density: 0.7, nights: 5 }, savedAt: 1, label: 'test', sim: {}, journal: {}, story: {}, extra: { pitch: 0, letter: '' } });
+  const good = () => ({ saveVersion: SAVE_VERSION, worldVersion: WORLD_VERSION, simVersion: SIM_VERSION, params: { seed: 'x', size: 'small', density: 0.7, nights: 5 }, savedAt: 1, label: 'test', sim: { version: SIM_VERSION }, journal: {}, story: {}, extra: { pitch: 0, letter: '' } });
 
   it('accepts current saves and rejects outdated or broken ones', () => {
     expect(validate(good())).toBeNull();
@@ -129,12 +129,14 @@ describe('save files', () => {
     expect(validate({ ...good(), worldVersion: WORLD_VERSION + 1 })).toMatch(/generator/);
     expect(validate({ ...good(), simVersion: SIM_VERSION - 1 })).toMatch(/older simulation/);
     expect(validate({ ...good(), sim: undefined })).toMatch(/incomplete/);
+    expect(validate({ saveVersion: SAVE_VERSION })).toMatch(/incomplete/);
+    expect(validate({ ...good(), sim: { bogus: true } })).toMatch(/damaged/);
     expect(validate(null)).toMatch(/Corrupt/);
   });
 
   it('ignores foreign or malformed settings (Pages sites share one origin)', () => {
     const KEY = 'night-neighbour-beta/settings.v1';
-    localStorage.setItem(KEY, JSON.stringify({ quality: 'ultra', fov: 'wide', brightness: 1.3, master: null, bindings: { forward: 42, back: 'KeyX' } }));
+    localStorage.setItem(KEY, JSON.stringify({ quality: 'ultra', fov: 'wide', brightness: 1.3, master: null, sensitivity: -50, music: 1e6, bindings: { forward: 42, back: 'KeyX', left: '<img>' } }));
     const s = loadSettings();
     expect(s.quality).toBe(DEFAULT_SETTINGS.quality);
     expect(s.fov).toBe(DEFAULT_SETTINGS.fov);
@@ -142,6 +144,9 @@ describe('save files', () => {
     expect(s.brightness).toBe(1.3);
     expect(s.bindings.forward).toBe('KeyW');
     expect(s.bindings.back).toBe('KeyX');
+    expect(s.bindings.left).toBe('KeyA');
+    expect(s.sensitivity).toBe(0.2); // clamped to the slider range
+    expect(s.music).toBe(1);
     localStorage.setItem(KEY, 'null');
     expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
     localStorage.setItem(KEY, '{broken');

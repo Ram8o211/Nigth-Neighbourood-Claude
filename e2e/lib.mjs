@@ -12,13 +12,20 @@ export function chromePath() {
 
 export async function launch({ base, outDir, width = 1280, height = 720 }) {
   mkdirSync(outDir, { recursive: true });
+  // no autoplay override: audio must start from the real click on "Begin", as for players.
+  // Local servers bypass any HTTP proxy; a deployed site (NN_URL) uses the machine's proxy settings.
+  const local = /^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(base);
   const browser = await chromium.launch({
     executablePath: chromePath(),
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--no-proxy-server'],
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', ...(local ? ['--no-proxy-server'] : [])],
   });
   const page = await browser.newPage({ viewport: { width, height } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e.stack || e)));
+  // any failed request for the game's own files (a broken asset path on GitHub Pages, say) is an error
+  page.on('response', (r) => {
+    if (r.status() >= 400 && r.url().startsWith(base)) errors.push(`HTTP ${r.status()} ${r.url()}`);
+  });
   page.on('console', (m) => {
     const t = m.text();
     if ((m.type() === 'error' || m.type() === 'warning') && !t.includes('404') && !t.includes('GPU stall') && !t.includes('GL Driver')) errors.push(m.type() + ': ' + t);

@@ -23,23 +23,29 @@ bottom.
 
 **https://ram8o211.github.io/Nigth-Neighbourood-Claude/**
 
-Nothing to install: any desktop browser with WebGL 2 (current Chrome, Edge,
-Firefox or Safari). A dedicated or recent integrated GPU is recommended.
-Saves and settings stay in that browser's local storage.
+Nothing to install: open it in a desktop browser with WebGL 2. It was tested
+in Chromium; current Chrome and Edge should behave the same, Firefox and
+Safari are expected to work but have not been tested. A dedicated or recent
+integrated GPU is recommended. Saves and settings live in the browser's local
+storage, which every `ram8o211.github.io` site shares, so the game prefixes
+its keys (`night-neighbour-beta/…`).
 
 Every push to `main` runs [`.github/workflows/pages.yml`](.github/workflows/pages.yml):
-type-check, unit and simulation tests, production build, deployment to Pages,
-and then the browser smoke test played against the live site (its screenshots
-and results are attached to the run as the `smoke-test-screenshots`
-artifact). The workflow can also be started by hand from the *Actions* tab.
+type-check, unit and simulation tests, production build, publishing the build
+to the `gh-pages` branch that Pages serves, and then the browser smoke test
+played against the live site once it serves that exact build (screenshots and
+results are attached to the run as the `smoke-test-screenshots` artifact). It
+can also be started by hand from the *Actions* tab.
 
-One-time setup by the repository owner: *Settings → Pages → Build and
-deployment → Source: **GitHub Actions***. Until that is set, the deploy job
-fails with "Get Pages site failed"; set it and re-run the workflow.
+If the site does not come up after the first deployment, the repository owner
+sets *Settings → Pages → Build and deployment → Source: **Deploy from a
+branch***, branch **gh-pages**, folder **/ (root)**, and re-runs the workflow.
 
 To run the smoke test from your own machine against the deployed site:
 
 ```bash
+npm install
+npx playwright-core install chromium     # once: the browser Playwright drives
 NN_URL=https://ram8o211.github.io/Nigth-Neighbourood-Claude/ npm run test:e2e
 ```
 

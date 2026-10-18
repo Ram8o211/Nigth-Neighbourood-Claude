@@ -41,6 +41,16 @@ export const DEFAULT_SETTINGS: Settings = {
  */
 const KEY = 'night-neighbour-beta/settings.v1';
 const QUALITIES: Quality[] = ['low', 'medium', 'high'];
+/** the same ranges the settings sliders allow */
+const RANGES: Partial<Record<keyof Settings, [number, number]>> = {
+  brightness: [0.6, 1.8],
+  fov: [55, 95],
+  sensitivity: [0.2, 3],
+  master: [0, 1],
+  music: [0, 1],
+  sfx: [0, 1],
+  ambience: [0, 1],
+};
 
 export function loadSettings(): Settings {
   const out = structuredClone(DEFAULT_SETTINGS);
@@ -56,13 +66,18 @@ export function loadSettings(): Settings {
       const v = s[k];
       const def = DEFAULT_SETTINGS[k];
       if (typeof v !== typeof def) continue;
-      if (typeof v === 'number' && !Number.isFinite(v)) continue;
+      if (typeof v === 'number') {
+        if (!Number.isFinite(v)) continue;
+        const r = RANGES[k];
+        o[k] = r ? Math.min(r[1], Math.max(r[0], v)) : v;
+        continue;
+      }
       o[k] = v;
     }
     if (!QUALITIES.includes(out.quality)) out.quality = DEFAULT_SETTINGS.quality;
     const b = s.bindings as Record<string, unknown> | undefined;
     if (b && typeof b === 'object')
-      for (const a of Object.keys(DEFAULT_BINDINGS) as Action[]) if (typeof b[a] === 'string' && b[a]) out.bindings[a] = b[a] as string;
+      for (const a of Object.keys(DEFAULT_BINDINGS) as Action[]) if (typeof b[a] === 'string' && /^[A-Za-z0-9]+$/.test(b[a] as string)) out.bindings[a] = b[a] as string;
     return out;
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

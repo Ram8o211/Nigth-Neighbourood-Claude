@@ -46,9 +46,10 @@ export function validate(s: unknown): string | null {
   if (!s || typeof s !== 'object') return 'Corrupt save data.';
   const g = s as Partial<SaveGame>;
   if (g.saveVersion !== SAVE_VERSION) return `Save format v${g.saveVersion ?? '?'} is outdated (current v${SAVE_VERSION}).`;
+  if (!g.params || !g.sim || !g.journal || !g.story) return 'Save data is incomplete.';
   if (g.worldVersion !== WORLD_VERSION) return 'This save was made with a different town generator and cannot be restored.';
   if (g.simVersion !== SIM_VERSION) return 'This save was made with an older simulation version.';
-  if (!g.params || !g.sim || !g.journal || !g.story) return 'Save data is incomplete.';
+  if ((g.sim as { version?: number }).version !== SIM_VERSION) return 'Save data is damaged.';
   return null;
 }
 
