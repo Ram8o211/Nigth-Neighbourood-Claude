@@ -9,7 +9,7 @@ import { formatClock, wrapAngle, clamp } from '../core/math';
 import { listSaves, deleteSave, SLOTS } from '../game/save';
 import { DEFAULT_BINDINGS, type Action } from '../game/input';
 import { ATTR_LABEL } from '../game/journal';
-import { DEFAULT_SETTINGS } from '../game/settings';
+import { DEFAULT_SETTINGS, KEY_CODE } from '../game/settings';
 import { memoryLine } from '../sim/memory';
 import * as THREE from 'three';
 
@@ -302,8 +302,11 @@ export class UI {
         const b = btn(s.bindings[a], () => {
           b.textContent = 'press a key...';
           g.input.capture = (code) => {
-            s.bindings[a] = code;
-            g.applySettings();
+            // keys the browser cannot name (empty code) keep the old binding
+            if (KEY_CODE.test(code)) {
+              s.bindings[a] = code;
+              g.applySettings();
+            }
             renderBinds();
           };
         }, 'small');

@@ -187,7 +187,8 @@ export default async function smoke(page, h) {
       s = await state();
       check('neighbour targeted', s.target?.kind === 'npc', s.target?.prompt);
       await h.tap('KeyE');
-      await h.frames(2);
+      // under heavy load a frame or two may pass before the dialog is built
+      await page.locator('#layer .dialog').waitFor({ timeout: 30000 }).catch(() => {});
       const dlg = await page.locator('#layer .dialog').count();
       check('E opens conversation', dlg > 0);
       await h.shot('08_dialogue');

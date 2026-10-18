@@ -201,6 +201,11 @@ the game on real hardware (the FPS counter is in *Settings → Graphics*).
   with a legend.
 * Save results were shown on the hidden HUD while the pause menu was open,
   and failed autosaves were silent.
+* Preparing the GitHub Actions smoke test showed that Playwright's stripped
+  "headless shell" browser reports one large bogus mouse movement after a
+  click while the pointer is locked; the game turned the player with it, so a
+  bat swing missed its target. Mouse input now ignores single-event jumps of
+  more than 400 px, and CI drives full Chromium like the local runs.
 * The crowbar's description promised prying doors and windows open, which was
   not implemented; cigarettes were sold but had no use (now: offer one to a
   smoker for rumours).

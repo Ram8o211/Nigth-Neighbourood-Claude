@@ -41,6 +41,8 @@ export const DEFAULT_SETTINGS: Settings = {
  */
 const KEY = 'night-neighbour-beta/settings.v1';
 const QUALITIES: Quality[] = ['low', 'medium', 'high'];
+/** what a key binding may look like: a KeyboardEvent.code such as KeyW, ShiftLeft or F2 */
+export const KEY_CODE = /^[A-Za-z0-9]+$/;
 /** the same ranges the settings sliders allow */
 const RANGES: Partial<Record<keyof Settings, [number, number]>> = {
   brightness: [0.6, 1.8],
@@ -77,7 +79,7 @@ export function loadSettings(): Settings {
     if (!QUALITIES.includes(out.quality)) out.quality = DEFAULT_SETTINGS.quality;
     const b = s.bindings as Record<string, unknown> | undefined;
     if (b && typeof b === 'object')
-      for (const a of Object.keys(DEFAULT_BINDINGS) as Action[]) if (typeof b[a] === 'string' && /^[A-Za-z0-9]+$/.test(b[a] as string)) out.bindings[a] = b[a] as string;
+      for (const a of Object.keys(DEFAULT_BINDINGS) as Action[]) if (typeof b[a] === 'string' && KEY_CODE.test(b[a] as string)) out.bindings[a] = b[a] as string;
     return out;
   } catch {
     return structuredClone(DEFAULT_SETTINGS);

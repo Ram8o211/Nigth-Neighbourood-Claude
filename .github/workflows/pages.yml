@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # push the built site to the gh-pages branch
+  contents: read
 
 # one deployment at a time; a newer push waits instead of cancelling a deploy in progress
 concurrency:
@@ -23,13 +23,19 @@ concurrency:
 jobs:
   publish:
     name: Type-check, test, build and publish
+    # only main is published, also when the workflow is started by hand
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write # push the built site to the gh-pages branch
+      pages: write # ask GitHub Pages to rebuild
     outputs:
       page_url: ${{ steps.publish.outputs.page_url }}
-      entry: ${{ steps.publish.outputs.entry }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -43,48 +49,59 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          entry=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' dist/index.html | head -1)
-          test -n "$entry"
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "entry=$entry" >> "$GITHUB_OUTPUT"
           echo "page_url=https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/" >> "$GITHUB_OUTPUT"
+          # marks exactly which commit the live site serves (checked by the smoke job)
+          echo "$GITHUB_SHA" > dist/version.txt
           cd dist
           touch .nojekyll
           git init -q -b gh-pages
           git add -A
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -q -m "Deploy ${GITHUB_SHA::7} (${entry})"
+            commit -q -m "Deploy ${GITHUB_SHA::7}"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+      - name: Ask GitHub Pages to rebuild
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(gh api "repos/${GITHUB_REPOSITORY}" --jq .has_pages)" != "true" ]; then
+            echo "::warning::GitHub Pages is not enabled yet. Settings -> Pages -> Source: Deploy from a branch, gh-pages / (root)."
+          fi
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" > /dev/null \
+            || echo "::warning::Could not request a Pages build (is Pages set to serve gh-pages?)"
 
   smoke:
     name: Browser smoke test on the live site
     needs: publish
-    runs-on: ubuntu-latest
+    # Playwright 1.56 ships browsers for Ubuntu up to 24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       NN_URL: ${{ needs.publish.outputs.page_url }}
-      ENTRY: ${{ needs.publish.outputs.entry }}
       NN_OUT: e2e/out
     steps:
-      - name: Wait until GitHub Pages serves this build
+      - name: Wait until GitHub Pages serves this commit
         run: |
-          for i in $(seq 1 90); do
-            if curl -sfL "$NN_URL" | grep -qF "$ENTRY"; then echo "Live: $NN_URL serves $ENTRY"; exit 0; fi
+          test -n "$NN_URL"
+          for _ in $(seq 1 90); do
+            if curl -sfL --max-time 20 "${NN_URL}version.txt" | grep -qx "$GITHUB_SHA"; then echo "Live: $NN_URL serves $GITHUB_SHA"; exit 0; fi
             sleep 10
           done
-          echo "::error::$NN_URL did not serve $ENTRY within 15 minutes. If this is the first deployment, check Settings -> Pages -> Source: Deploy from a branch, gh-pages / (root)."
+          echo "::error::$NN_URL did not serve commit $GITHUB_SHA within 15 minutes. If this is the first deployment, check Settings -> Pages -> Source: Deploy from a branch, gh-pages / (root)."
           exit 1
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - name: Install Chromium for the smoke test
-        run: npx playwright-core install --with-deps chromium
+        run: npx playwright-core install --with-deps --no-shell chromium
       - name: Play through the game in headless Chromium (software rendering)
         run: node e2e/run-e2e.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: smoke-test-screenshots

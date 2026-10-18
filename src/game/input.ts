@@ -51,6 +51,9 @@ export const DEFAULT_BINDINGS: Record<Action, string> = {
   wait: 'KeyT',
 };
 
+/** largest believable mouse movement in one event, in CSS pixels */
+const MAX_MOUSE_STEP = 400;
+
 export class Input {
   bindings: Record<Action, string> = { ...DEFAULT_BINDINGS };
   private down = new Set<string>();
@@ -102,6 +105,9 @@ export class Input {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('mousemove', (e) => {
       if (!this.locked) return;
+      // some browsers report one bogus jump (about the cursor's offset) around pointer-lock
+      // changes and clicks; no real hand movement covers this much in a single event
+      if (Math.abs(e.movementX) > MAX_MOUSE_STEP || Math.abs(e.movementY) > MAX_MOUSE_STEP) return;
       this.mouseDX += e.movementX;
       this.mouseDY += e.movementY;
     });

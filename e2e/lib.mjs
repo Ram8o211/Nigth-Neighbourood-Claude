@@ -14,9 +14,14 @@ export async function launch({ base, outDir, width = 1280, height = 720 }) {
   mkdirSync(outDir, { recursive: true });
   // no autoplay override: audio must start from the real click on "Begin", as for players.
   // Local servers bypass any HTTP proxy; a deployed site (NN_URL) uses the machine's proxy settings.
-  const local = /^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(base);
+  const host = new URL(base).hostname;
+  const local = ['localhost', '[::1]', '0.0.0.0'].includes(host) || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  const exe = chromePath();
   const browser = await chromium.launch({
-    executablePath: chromePath(),
+    executablePath: exe,
+    // without a local binary use Playwright's full Chromium, not its stripped headless shell
+    // (the shell reports a bogus mouse jump after clicks under pointer lock)
+    channel: exe ? undefined : 'chromium',
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', ...(local ? ['--no-proxy-server'] : [])],
   });
   const page = await browser.newPage({ viewport: { width, height } });
