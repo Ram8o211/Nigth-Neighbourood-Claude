@@ -265,6 +265,19 @@ describe('save / load', () => {
     }
     expect(stateHash(b)).toEqual(stateHash(a));
   });
+
+  it('keeps open-ended activities running after a restore', () => {
+    const a = makeSim('saveload-open');
+    runHours(a, 2);
+    const n = a.npcs.find((x) => x.activity)!;
+    n.activity!.until = Infinity;
+    const b = new Simulation(generateWorld(a.world.params));
+    b.populate();
+    b.restore(JSON.parse(JSON.stringify(a.snapshot())));
+    const m = b.npcs.find((x) => x.id === n.id)!;
+    expect(m.activity!.until).toBe(Infinity);
+    expect(m.activity!.kind).toBe(n.activity!.kind);
+  });
 });
 
 describe('police reasoning', () => {

@@ -172,6 +172,8 @@ export class Game {
   }
 
   private setupSession(world: WorldData, sim: Simulation) {
+    // the ending screen's buttons start a new session without passing through the main menu
+    this.ui.endingShown = false;
     this.world = world;
     this.sim = sim;
     this.renderer.setWorld(world);
@@ -813,6 +815,7 @@ export class Game {
     f.container.push({ ...s });
     this.sim!.player.inventory.splice(invIdx, 1);
     if (this.sim!.player.equipped === invIdx) pl.equip(-1);
+    else if (this.sim!.player.equipped > invIdx) this.sim!.player.equipped--;
   }
 
   onOpenContainer(f: Furniture) {

@@ -64,8 +64,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$(gh api "repos/${GITHUB_REPOSITORY}" --jq .has_pages)" != "true" ]; then
-            echo "::warning::GitHub Pages is not enabled yet. Settings -> Pages -> Source: Deploy from a branch, gh-pages / (root)."
+          source="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '.build_type + " " + .source.branch + " " + .source.path' 2>/dev/null || true)"
+          if [ "$source" != "legacy gh-pages /" ]; then
+            echo "GitHub Pages is currently set to: ${source:-not enabled}"
+            # usually needs admin rights the workflow token does not have; then the owner changes the setting once
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=legacy -f "source[branch]=gh-pages" -f "source[path]=/" \
+              || echo "::warning::GitHub Pages does not serve the gh-pages branch. Settings -> Pages -> Source: Deploy from a branch, gh-pages / (root)."
           fi
           gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" > /dev/null \
             || echo "::warning::Could not request a Pages build (is Pages set to serve gh-pages?)"

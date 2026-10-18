@@ -1314,6 +1314,8 @@ export class Simulation {
     this.actors = s.actors;
     this.player = this.actors[0] as PlayerState;
     this.npcs = this.actors.slice(1) as NpcState[];
+    // JSON stores an open-ended activity deadline (Infinity) as null
+    for (const n of this.npcs) if (n.activity && typeof n.activity.until !== 'number') n.activity.until = Infinity;
     this.cases = s.cases;
     this.incidents = s.incidents;
     this.clues = s.clues;
