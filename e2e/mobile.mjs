@@ -272,6 +272,8 @@ export default async function mobile(page, h) {
   const closeBtn = await h.eval(() => {
     const b = [...document.querySelectorAll('#layer button')].find((b) => b.textContent.trim() === 'Close');
     if (!b) return null;
+    // a full inventory is taller than a phone screen: scroll to the button, as a player would
+    b.scrollIntoView({ block: 'nearest' });
     const r = b.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   });
@@ -361,6 +363,7 @@ export default async function mobile(page, h) {
 
   // ---------------------------------------------------------------- other phone and tablet sizes
   for (const [w, hgt, name] of [
+    [640, 360, 'small Android landscape'],
     [667, 375, 'iPhone SE landscape'],
     [740, 360, 'phone landscape with browser bars'],
     [915, 412, 'large Android landscape'],
@@ -396,6 +399,12 @@ export default async function mobile(page, h) {
     });
     check(`${name} (${w}x${hgt}): controls on screen, uncovered, clear of the HUD`, !lay.off.length && !lay.covered.length && !lay.overlaps.length, JSON.stringify(lay));
     await h.shot(`m09_${w}x${hgt}`);
+    await tapControl('pause');
+    await h.waitFor(() => window.__game.mode === 'paused', null, 20000).catch(() => {});
+    f = await fits();
+    check(`${name}: pause menu fits`, !f.bad.length && !f.wide, f.bad.join('; '));
+    await h.tapText('Resume');
+    await h.waitFor(() => window.__game.mode === 'playing', null, 20000).catch(() => {});
   }
   await page.setViewportSize({ width: 844, height: 390 });
   await h.frames(4);

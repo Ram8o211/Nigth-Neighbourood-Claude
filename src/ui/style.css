@@ -952,8 +952,8 @@ table.list th {
 }
 #touch .t-light {
   --s: 50px;
-  right: calc(30px + var(--sar));
-  bottom: calc(172px + var(--sab));
+  right: calc(180px + var(--sar));
+  bottom: calc(150px + var(--sab));
   font-size: 10px;
 }
 /* observer: climb and descend, left of the inspector panel */
@@ -1012,13 +1012,14 @@ table.list th {
 body.touch .objectives {
   left: calc(14px + var(--sal));
   top: calc(10px + var(--sat));
-  max-width: min(360px, 34vw);
+  max-width: min(360px, 32vw);
   font-size: 13px;
 }
+/* a second row, under the menu buttons, so narrow phones fit both */
 body.touch .compass {
-  top: calc(10px + var(--sat));
-  width: min(360px, 32vw);
-  margin-left: calc(min(360px, 32vw) / -2);
+  top: calc(54px + var(--sat));
+  width: min(360px, 30vw);
+  margin-left: calc(min(360px, 30vw) / -2);
 }
 body.touch .clock {
   top: calc(54px + var(--sat));
@@ -1032,8 +1033,13 @@ body.touch .equip {
   bottom: auto;
   right: calc(16px + var(--sar));
 }
+/* WEAPON cycles through them; the equipped one is named above */
+body.touch .equip .slots {
+  display: none;
+}
+/* centred between the stick and the action buttons rather than on the screen */
 body.touch .bars {
-  left: 50%;
+  left: calc(50% - 45px);
   bottom: calc(8px + var(--sab));
   transform: translateX(-50%);
   width: min(220px, 28vw);
@@ -1042,13 +1048,14 @@ body.touch .needs {
   flex-wrap: wrap;
 }
 body.touch .stealth {
+  left: calc(50% - 45px);
   bottom: calc(58px + var(--sab));
   gap: 10px;
   white-space: nowrap;
 }
 body.touch .messages {
   left: calc(14px + var(--sal));
-  top: calc(84px + var(--sat));
+  top: calc(118px + var(--sat));
   bottom: auto;
   width: min(380px, 40vw);
   font-size: 13px;
